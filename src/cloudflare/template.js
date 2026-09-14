@@ -148,6 +148,7 @@ export default {
 export function createWranglerConfig({
   name,
   schedule,
+  declareSecrets = true,
   verification = false,
   compatibilityDate = "2026-09-14"
 }) {
@@ -172,7 +173,7 @@ export function createWranglerConfig({
     compatibility_date: compatibilityDate,
     workers_dev: verification,
     observability: { enabled: true },
-    secrets: { required: requiredSecrets },
+    secrets: declareSecrets ? { required: requiredSecrets } : undefined,
     triggers: { crons: verification ? [] : [schedule] }
   }, null, 2)}\n`;
 }

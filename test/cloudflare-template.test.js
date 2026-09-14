@@ -153,10 +153,17 @@ test("Wrangler config separates verification and final exposure", () => {
     name: "supacron-abcdefghijklmnopqrst",
     schedule: "0 0,12 * * *"
   }));
+  const bootstrap = JSON.parse(createWranglerConfig({
+    name: "supacron-abcdefghijklmnopqrst",
+    schedule: "0 0,12 * * *",
+    declareSecrets: false,
+    verification: true
+  }));
 
   assert.equal(verification.workers_dev, true);
   assert.deepEqual(verification.triggers.crons, []);
   assert.ok(verification.secrets.required.includes("SUPACRON_VERIFY_SECRET"));
+  assert.equal("secrets" in bootstrap, false);
   assert.equal(final.workers_dev, false);
   assert.deepEqual(final.triggers.crons, ["0 0,12 * * *"]);
   assert.equal(final.secrets.required.includes("SUPACRON_VERIFY_SECRET"), false);
