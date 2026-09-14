@@ -1,15 +1,17 @@
 #!/usr/bin/env node
 
 import { doctor } from "./doctor.js";
+import { init } from "./init.js";
 import { ping } from "./ping.js";
-import { setup } from "./setup.js";
 
 const command = process.argv[2] ?? "help";
 const args = process.argv.slice(3);
 
 try {
-  if (command === "setup" || command === "init") {
-    await setup(args);
+  if (command === "init") {
+    await init(args);
+  } else if (command === "setup") {
+    throw new Error("The setup command has been replaced by `supacron init`.");
   } else if (command === "ping") {
     await ping(args);
   } else if (command === "doctor") {
@@ -30,13 +32,17 @@ function printHelp() {
   console.log(`supacron
 
 Usage:
-  supacron init [--install] [--yes]
+  supacron init
+  supacron init --mode manual|automatic|observe
+  supacron init --project-ref <ref> --account-id <id>
   supacron ping [--url <supabase-url>] [--key <anon-key>] [--secret <secret>]
   supacron doctor [--url <supabase-url>] [--key <anon-key>] [--secret <secret>]
 
 Commands:
-  init     Generate a Supabase heartbeat and Cloudflare Worker Cron.
+  init     Securely set up Supabase heartbeat + Cloudflare Workers Cron.
   ping     Call the Supabase heartbeat RPC once.
   doctor   Check local config/env and verify the heartbeat RPC.
+
+Init never asks for database passwords, connection strings, service-role keys, Supabase access tokens, or Cloudflare API tokens.
 `);
 }
