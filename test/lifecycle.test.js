@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { status } from "../src/lifecycle.js";
+import { repair, status } from "../src/lifecycle.js";
 
 const MANIFEST = {
   schemaVersion: 1,
@@ -105,6 +105,86 @@ test("status requires an existing non-secret manifest", async () => {
   );
 });
 
+
+test("repair redeploys the final Worker config from the saved manifest", async () => {
+  const output = createOutput();
+  const calls = [];
+
+  const report = await repair(["--project-ref", "abcdefghijklmnopqrst", "--approve-redeploy"], {
+    out: output,
+    readInstallManifest: async () => MANIFEST,
+    verifyDbStructure: ({ projectRef }) => {
+      calls.push(["structure", projectRef]);
+      return { ok: true, heartbeatTable: true, pingFunction: true, heartbeatPolicy: true };
+    },
+    deployWorker: (request) => calls.push(["deploy", request]),
+  });
+
+  assert.equal(report.ok, true);
+  assert.equal(calls[0][0], "structure");
+  assert.deepEqual(calls[1], [
+    "deploy",
+    {
+      accountId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      workerName: "supacron-abcdefghijklmnopqrst",
+      schedule: "0 0,12 * * *",
+      verification: false,
+      declareSecrets: true,
+    },
+  ]);
+  assert.match(output.text(), /Supacron repair complete/);
+  assert.doesNotMatch(output.text(), /sb_publishable_/);
+});
+
+test("repair refuses to recreate missing Supabase objects without a stored secret", async () => {
+  await assert.rejects(
+    () =>
+      repair(["--project-ref", "abcdefghijklmnopqrst", "--approve-redeploy"], {
+        out: createOutput(),
+        readInstallManifest: async () => MANIFEST,
+        verifyDbStructure: () => ({
+          ok: false,
+          heartbeatTable: false,
+          pingFunction: false,
+          heartbeatPolicy: false,
+        }),
+      }),
+    /fresh heartbeat secret/,
+  );
+});
+
+test("repair asks before redeploying Cloudflare", async () => {
+  await assert.rejects(
+    () =>
+      repair(["--project-ref", "abcdefghijklmnopqrst"], {
+        out: createOutput(),
+        rl: createRl(["no"]),
+        readInstallManifest: async () => MANIFEST,
+        verifyDbStructure: () => ({
+          ok: true,
+          heartbeatTable: true,
+          pingFunction: true,
+          heartbeatPolicy: true,
+        }),
+        deployWorker: () => {
+          throw new Error("should not deploy");
+        },
+      }),
+    /stopped before redeploying/,
+  );
+});
+
+function createRl(answers) {
+  return {
+    async question() {
+      if (answers.length === 0) {
+        throw new Error("No test answer queued.");
+      }
+      return answers.shift();
+    },
+    close() {},
+  };
+}
 function createOutput() {
   let buffer = "";
   return {

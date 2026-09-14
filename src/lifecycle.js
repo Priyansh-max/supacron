@@ -1,6 +1,8 @@
 import { parseArgs } from "./args.js";
+import { createPromptSession } from "./prompts.js";
 import { readManifest } from "./lib/manifest.js";
 import { verifyHeartbeat, verifyStructure } from "./supabase/verify.js";
+import { deployWorker } from "./cloudflare/deploy.js";
 
 export async function status(args = [], dependencies = {}) {
   const parsed = parseArgs(args);
@@ -42,6 +44,74 @@ export async function status(args = [], dependencies = {}) {
   return report;
 }
 
+export async function repair(args = [], dependencies = {}) {
+  const parsed = parseArgs(args);
+  const projectRef = parsed.values["project-ref"];
+  if (!projectRef) {
+    throw new Error("repair requires --project-ref <ref>.");
+  }
+
+  const out = dependencies.out || process.stdout;
+  const manifest = await (dependencies.readInstallManifest || readManifest)(projectRef);
+  if (!manifest) {
+    throw new Error(`No Supacron installation manifest found for project ${projectRef}.`);
+  }
+
+  const verifyDbStructure = dependencies.verifyDbStructure || verifyStructure;
+  const executeSql = dependencies.executeSql;
+  const structure = await runCheck(() =>
+    verifyDbStructure({
+      projectRef,
+      execute: executeSql,
+    }),
+  );
+
+  if (structure.ok !== true) {
+    throw new Error(
+      "Repair stopped: Supabase objects are missing or unavailable. Rerun `supacron init` to create a fresh heartbeat secret.",
+    );
+  }
+
+  const rl = dependencies.rl || await createPromptSession();
+  const shouldCloseRl = !dependencies.rl;
+  try {
+    writeRepairPlan(out, manifest);
+    await requireRepairApproval({ rl, out, parsed });
+  } finally {
+    if (shouldCloseRl) {
+      rl.close();
+    }
+  }
+
+  await (dependencies.deployWorker || deployWorker)({
+    accountId: manifest.cloudflare.accountId,
+    workerName: manifest.cloudflare.workerName,
+    schedule: manifest.cloudflare.schedule,
+    verification: false,
+    declareSecrets: true,
+  });
+
+  const report = {
+    ok: true,
+    manifest,
+    structure,
+  };
+  writeRepairReport(out, report);
+  return report;
+}
+
+async function requireRepairApproval({ rl, out, parsed }) {
+  if (parsed.flags.has("approve-redeploy")) {
+    write(out, "Redeploy the scheduled Cloudflare Worker from the saved manifest? yes");
+    return;
+  }
+
+  const answer = await rl.question("Redeploy the scheduled Cloudflare Worker from the saved manifest? (y/N): ");
+  if (!["y", "yes"].includes(answer.trim().toLowerCase())) {
+    throw new Error("Repair stopped before redeploying Cloudflare.");
+  }
+}
+
 function writeStatusReport(out, report) {
   const { manifest, structure, heartbeat } = report;
 
@@ -69,6 +139,28 @@ function writeStatusReport(out, report) {
   if (manifest.cloudflare.dashboardUrl) {
     write(out, `  Cloudflare: ${manifest.cloudflare.dashboardUrl}`);
   }
+}
+
+function writeRepairPlan(out, manifest) {
+  write(out, "");
+  write(out, "Supacron repair plan");
+  write(out, `Project: ${manifest.supabase.name || manifest.supabase.projectRef} (${manifest.supabase.projectRef})`);
+  write(out, `Cloudflare account: ${manifest.cloudflare.accountId}`);
+  write(out, `Worker: ${manifest.cloudflare.workerName}`);
+  write(out, `Schedule: ${manifest.cloudflare.schedule}`);
+  write(out, "Supacron will redeploy the final scheduled Worker config only.");
+  write(out, "It will not read, print, recreate, or store local secrets.");
+}
+
+function writeRepairReport(out, report) {
+  write(out, "");
+  write(out, "Supacron repair complete");
+  write(out, `Worker redeployed: ${report.manifest.cloudflare.workerName}`);
+  write(out, `Schedule: ${report.manifest.cloudflare.schedule}`);
+  if (report.manifest.cloudflare.dashboardUrl) {
+    write(out, `Cloudflare: ${report.manifest.cloudflare.dashboardUrl}`);
+  }
+  write(out, "Run `supacron status --project-ref <ref>` after the next scheduled tick to confirm fresh heartbeat data.");
 }
 
 async function runCheck(check) {
