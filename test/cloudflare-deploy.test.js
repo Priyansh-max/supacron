@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { WRANGLER_PACKAGE } from "../src/constants.js";
 import {
   deleteWorkerSecret,
+  deleteWorker,
   deployWorker,
   parseWorkersDevUrl,
   putWorkerSecret,
@@ -123,6 +125,25 @@ test("deleteWorkerSecret deletes only an allowlisted binding", () => {
     "secret", "delete", "SUPACRON_VERIFY_SECRET", "--name", WORKER_NAME
   ]);
   assert.equal(call.options.input, "y\n");
+});
+
+test("deleteWorker deletes the selected Worker without force and with account scoping", () => {
+  const calls = [];
+  deleteWorker({
+    accountId: ACCOUNT_ID,
+    workerName: "supacron-demo",
+    run: (...args) => calls.push(args) || { stdout: "", stderr: "" }
+  });
+
+  assert.equal(calls[0][0], WRANGLER_PACKAGE);
+  assert.equal(calls[0][1], "wrangler");
+  assert.deepEqual(calls[0][2], ["delete", "supacron-demo"]);
+  assert.equal(calls[0][3].displayName, "Cloudflare Worker delete");
+  assert.deepEqual(calls[0][3].env, {
+    CLOUDFLARE_ACCOUNT_ID: ACCOUNT_ID
+  });
+  assert.equal(calls[0][3].input, "y\n");
+  assert.equal(calls[0][2].includes("--force"), false);
 });
 
 test("parseWorkersDevUrl accepts only the expected Worker hostname", () => {

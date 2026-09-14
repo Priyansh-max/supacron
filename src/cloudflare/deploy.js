@@ -103,6 +103,26 @@ export function deleteWorkerSecret({
   );
 }
 
+export function deleteWorker({
+  accountId,
+  workerName,
+  run = runNpx
+}) {
+  validateTarget(accountId, workerName);
+
+  return run(
+    WRANGLER_PACKAGE,
+    "wrangler",
+    ["delete", workerName],
+    {
+      displayName: "Cloudflare Worker delete",
+      env: { CLOUDFLARE_ACCOUNT_ID: accountId },
+      input: "y\n",
+      timeoutMs: 120_000
+    }
+  );
+}
+
 export async function verifyDeployedWorker({
   workersDevUrl,
   verifySecret,
