@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { repair, status } from "../src/lifecycle.js";
+import { repair, status, uninstall } from "../src/lifecycle.js";
 
 const MANIFEST = {
   schemaVersion: 1,
@@ -172,6 +172,87 @@ test("repair asks before redeploying Cloudflare", async () => {
       }),
     /stopped before redeploying/,
   );
+});
+
+test("uninstall deletes Worker, runs scoped SQL, and removes the manifest after approval", async () => {
+  const output = createOutput();
+  const calls = [];
+
+  const report = await uninstall(["--project-ref", "abcdefghijklmnopqrst", "--approve-uninstall"], {
+    out: output,
+    readInstallManifest: async () => MANIFEST,
+    deleteWorker: async (request) => calls.push(["delete-worker", request]),
+    executeSql: async (request) => calls.push(["sql", request]),
+    deleteInstallManifest: async (projectRef) => {
+      calls.push(["manifest", projectRef]);
+      return true;
+    },
+  });
+
+  assert.equal(report.ok, true);
+  assert.equal(calls[0][0], "delete-worker");
+  assert.deepEqual(calls[0][1], {
+    accountId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    workerName: "supacron-abcdefghijklmnopqrst",
+  });
+  assert.equal(calls[1][0], "sql");
+  assert.equal(calls[1][1].projectRef, "abcdefghijklmnopqrst");
+  assert.equal(calls[1][1].operation, "Supacron database uninstall");
+  assert.match(calls[1][1].sql, /drop function if exists public\.supacron_ping\(text\)/i);
+  assert.match(calls[1][1].sql, /drop table if exists supacron\.heartbeat/i);
+  assert.doesNotMatch(calls[1][1].sql, /cascade/i);
+  assert.deepEqual(calls[2], ["manifest", "abcdefghijklmnopqrst"]);
+  assert.match(output.text(), /Supacron uninstall complete/);
+  assert.doesNotMatch(output.text(), /sb_publishable_/);
+});
+
+test("uninstall asks before deleting anything", async () => {
+  const calls = [];
+  await assert.rejects(
+    () =>
+      uninstall(["--project-ref", "abcdefghijklmnopqrst"], {
+        out: createOutput(),
+        rl: createRl(["no"]),
+        readInstallManifest: async () => MANIFEST,
+        deleteWorker: () => calls.push("worker"),
+        executeSql: () => calls.push("sql"),
+        deleteInstallManifest: () => calls.push("manifest"),
+      }),
+    /stopped before deleting/,
+  );
+
+  assert.deepEqual(calls, []);
+});
+
+test("uninstall requires an existing manifest", async () => {
+  await assert.rejects(
+    () =>
+      uninstall(["--project-ref", "abcdefghijklmnopqrst", "--approve-uninstall"], {
+        out: createOutput(),
+        readInstallManifest: async () => null,
+      }),
+    /No Supacron installation manifest/,
+  );
+});
+
+test("uninstall stops before database changes when Worker deletion fails", async () => {
+  const calls = [];
+  await assert.rejects(
+    () =>
+      uninstall(["--project-ref", "abcdefghijklmnopqrst", "--approve-uninstall"], {
+        out: createOutput(),
+        readInstallManifest: async () => MANIFEST,
+        deleteWorker: async () => {
+          calls.push("worker");
+          throw new Error("worker delete failed");
+        },
+        executeSql: () => calls.push("sql"),
+        deleteInstallManifest: () => calls.push("manifest"),
+      }),
+    /worker delete failed/,
+  );
+
+  assert.deepEqual(calls, ["worker"]);
 });
 
 function createRl(answers) {

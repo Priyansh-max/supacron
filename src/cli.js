@@ -2,7 +2,7 @@
 
 import { doctor } from "./doctor.js";
 import { init } from "./init.js";
-import { repair, status } from "./lifecycle.js";
+import { repair, status, uninstall } from "./lifecycle.js";
 import { ping } from "./ping.js";
 
 const command = process.argv[2] ?? "help";
@@ -17,6 +17,8 @@ try {
     await status(args);
   } else if (command === "repair") {
     await repair(args);
+  } else if (command === "uninstall") {
+    await uninstall(args);
   } else if (command === "ping") {
     await ping(args);
   } else if (command === "doctor") {
@@ -41,6 +43,7 @@ Usage:
   supacron init --mode manual|automatic|observe
   supacron init --project-ref <ref> --account-id <id>
   supacron status --project-ref <ref>
+  supacron uninstall --project-ref <ref>
   supacron repair --project-ref <ref>
   supacron ping [--url <supabase-url>] [--key <anon-key>] [--secret <secret>]
   supacron doctor [--url <supabase-url>] [--key <anon-key>] [--secret <secret>]
@@ -48,6 +51,7 @@ Usage:
 Commands:
   init     Securely set up Supabase heartbeat + Cloudflare Workers Cron.
   status   Verify a saved Supacron installation without local secrets.
+  uninstall Remove the Worker, Supabase objects, and local manifest after approval.
   repair   Redeploy the scheduled Worker config from the saved manifest.
   ping     Call the Supabase heartbeat RPC once.
   doctor   Check local config/env and verify the heartbeat RPC.
