@@ -66,7 +66,7 @@ test("deployWorker cleans its workspace after Wrangler fails", () => {
 });
 
 test("putWorkerSecret sends values through stdin and never arguments", () => {
-  const value = "s".repeat(48);
+  const value = "a".repeat(64);
   let call;
   putWorkerSecret({
     accountId: ACCOUNT_ID,
@@ -88,7 +88,43 @@ test("putWorkerSecret sends values through stdin and never arguments", () => {
   assert.equal(call.options.env.CLOUDFLARE_ACCOUNT_ID, ACCOUNT_ID);
 });
 
-test("secret operations reject unknown names and newline injection", () => {
+test("putWorkerSecret accepts only binding-specific secret value shapes", () => {
+  const accepted = [];
+  const run = (_packageSpec, _binary, args, options) => {
+    accepted.push([args[2], options.input]);
+    return { stdout: "", stderr: "", exitCode: 0 };
+  };
+
+  putWorkerSecret({
+    accountId: ACCOUNT_ID,
+    workerName: WORKER_NAME,
+    key: "SUPABASE_URL",
+    value: "https://abcdefghijklmnopqrst.supabase.co",
+    run
+  });
+  putWorkerSecret({
+    accountId: ACCOUNT_ID,
+    workerName: WORKER_NAME,
+    key: "SUPABASE_PUBLISHABLE_KEY",
+    value: `sb_publishable_${"p".repeat(30)}`,
+    run
+  });
+  putWorkerSecret({
+    accountId: ACCOUNT_ID,
+    workerName: WORKER_NAME,
+    key: "SUPACRON_VERIFY_SECRET",
+    value: "b".repeat(64),
+    run
+  });
+
+  assert.deepEqual(accepted, [
+    ["SUPABASE_URL", "https://abcdefghijklmnopqrst.supabase.co\n"],
+    ["SUPABASE_PUBLISHABLE_KEY", `sb_publishable_${"p".repeat(30)}\n`],
+    ["SUPACRON_VERIFY_SECRET", `${"b".repeat(64)}\n`]
+  ]);
+});
+
+test("secret operations reject unknown names, placeholders, malformed values, and injection", () => {
   assert.throws(
     () => putWorkerSecret({
       accountId: ACCOUNT_ID,
@@ -104,6 +140,33 @@ test("secret operations reject unknown names and newline injection", () => {
       workerName: WORKER_NAME,
       key: "SUPACRON_VERIFY_SECRET",
       value: `safe-value${"x".repeat(30)}\ninjected`
+    }),
+    /Invalid value/
+  );
+  assert.throws(
+    () => putWorkerSecret({
+      accountId: ACCOUNT_ID,
+      workerName: WORKER_NAME,
+      key: "SUPACRON_HEARTBEAT_SECRET",
+      value: "undefined"
+    }),
+    /Invalid value/
+  );
+  assert.throws(
+    () => putWorkerSecret({
+      accountId: ACCOUNT_ID,
+      workerName: WORKER_NAME,
+      key: "SUPABASE_URL",
+      value: "https://abcdefghijklmnopqrst.supabase.co/path"
+    }),
+    /Invalid value/
+  );
+  assert.throws(
+    () => putWorkerSecret({
+      accountId: ACCOUNT_ID,
+      workerName: WORKER_NAME,
+      key: "SUPABASE_PUBLISHABLE_KEY",
+      value: "sb_secret_not-allowed-here"
     }),
     /Invalid value/
   );

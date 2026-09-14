@@ -7,6 +7,15 @@ import { createWorkerSource, createWranglerConfig } from "./template.js";
 
 const ACCOUNT_ID = /^[a-f0-9]{32}$/;
 const WORKER_NAME = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+const HEX_SECRET = /^[a-f0-9]{64}$/;
+const PUBLISHABLE_KEY = /^sb_publishable_[A-Za-z0-9_-]{24,}$/;
+const PLACEHOLDER_SECRET_VALUES = new Set([
+  "undefined",
+  "null",
+  "true",
+  "false",
+  "[object object]"
+]);
 const SECRET_KEYS = new Set([
   "SUPABASE_URL",
   "SUPABASE_PUBLISHABLE_KEY",
@@ -246,7 +255,44 @@ function validateSecret(key, value) {
   if (!SECRET_KEYS.has(key)) {
     throw new Error("Refusing to write an unknown Cloudflare secret.");
   }
-  if (typeof value !== "string" || value.length < 8 || /[\r\n]/.test(value)) {
+  if (typeof value !== "string"
+      || value.length < 8
+      || value !== value.trim()
+      || /[\x00-\x1F\x7F]/.test(value)
+      || PLACEHOLDER_SECRET_VALUES.has(value.toLowerCase())) {
+    throw new Error(`Invalid value for Cloudflare secret ${key}.`);
+  }
+
+  if (key === "SUPABASE_URL") {
+    validateSupabaseUrl(value, key);
+    return;
+  }
+
+  if (key === "SUPABASE_PUBLISHABLE_KEY" && !PUBLISHABLE_KEY.test(value)) {
+    throw new Error(`Invalid value for Cloudflare secret ${key}.`);
+  }
+
+  if ((key === "SUPACRON_HEARTBEAT_SECRET" || key === "SUPACRON_VERIFY_SECRET")
+      && !HEX_SECRET.test(value)) {
+    throw new Error(`Invalid value for Cloudflare secret ${key}.`);
+  }
+}
+
+function validateSupabaseUrl(value, key) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`Invalid value for Cloudflare secret ${key}.`);
+  }
+
+  if (url.protocol !== "https:"
+      || url.username
+      || url.password
+      || url.search
+      || url.hash
+      || url.pathname !== "/"
+      || !url.hostname.endsWith(".supabase.co")) {
     throw new Error(`Invalid value for Cloudflare secret ${key}.`);
   }
 }
