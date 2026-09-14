@@ -1,4 +1,4 @@
-export const PROVIDERS = ["cloudflare", "github", "vercel"];
+export const PROVIDERS = ["cloudflare"];
 
 export function migrationSql({ secret }) {
   const escapedSecret = sqlString(secret);

@@ -30,12 +30,12 @@ function printHelp() {
   console.log(`supacron
 
 Usage:
-  supacron setup [--cron cloudflare|github|vercel] [--install] [--yes]
+  supacron init [--install] [--yes]
   supacron ping [--url <supabase-url>] [--key <anon-key>] [--secret <secret>]
   supacron doctor [--url <supabase-url>] [--key <anon-key>] [--secret <secret>]
 
 Commands:
-  setup    Generate Supabase heartbeat SQL and free cron provider files.
+  init     Generate a Supabase heartbeat and Cloudflare Worker Cron.
   ping     Call the Supabase heartbeat RPC once.
   doctor   Check local config/env and verify the heartbeat RPC.
 `);

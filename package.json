@@ -1,7 +1,7 @@
 {
   "name": "supacron",
   "version": "0.1.0",
-  "description": "Set up a tiny Supabase heartbeat with free cron providers.",
+  "description": "Set up a transparent Supabase heartbeat with Cloudflare Workers Cron.",
   "type": "module",
   "bin": {
     "supacron": "./src/cli.js"
@@ -17,9 +17,7 @@
     "supabase",
     "cron",
     "heartbeat",
-    "cloudflare",
-    "github-actions",
-    "vercel"
+    "cloudflare"
   ],
   "license": "MIT",
   "engines": {

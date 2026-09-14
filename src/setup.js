@@ -4,7 +4,7 @@ import path from "node:path";
 import { parseArgs } from "./args.js";
 import { writeConfig } from "./config.js";
 import { installProvider, providerCliStatus } from "./provider-actions.js";
-import { ask, choose, confirm, createPromptSession } from "./prompts.js";
+import { ask, confirm, createPromptSession } from "./prompts.js";
 import {
   PROVIDERS,
   cloudflareWorker,
@@ -34,11 +34,7 @@ export async function setup(args) {
   try {
     const supabaseUrl = await valueOrAsk(rl, parsed.values.url, "Supabase project URL");
     const supabaseAnonKey = await valueOrAsk(rl, parsed.values.key, "Supabase anon key");
-    const provider = providerFromArg || await choose(rl, "Where should the free cron run?", [
-      { value: "cloudflare", label: "Cloudflare Workers Cron (recommended)" },
-      { value: "github", label: "GitHub Actions" },
-      { value: "vercel", label: "Vercel Cron" }
-    ]);
+    const provider = "cloudflare";
     const schedule = parsed.values.schedule || DEFAULT_SCHEDULE;
     const supacronSecret = parsed.values.secret || crypto.randomBytes(24).toString("hex");
     const cronSecret = parsed.values["cron-secret"] || crypto.randomBytes(24).toString("hex");
