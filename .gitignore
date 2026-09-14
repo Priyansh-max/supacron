@@ -1,0 +1,7 @@
+node_modules/
+.tmp/
+.supacron/local.env
+.env
+.env.*
+!.env.example
+!.env.supacron.example

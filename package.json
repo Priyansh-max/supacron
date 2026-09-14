@@ -1,0 +1,28 @@
+{
+  "name": "supacron",
+  "version": "0.1.0",
+  "description": "Set up a tiny Supabase heartbeat with free cron providers.",
+  "type": "module",
+  "bin": {
+    "supacron": "./src/cli.js"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [
+    "supabase",
+    "cron",
+    "heartbeat",
+    "cloudflare",
+    "github-actions",
+    "vercel"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  }
+}
