@@ -1,12 +1,35 @@
-# Supacron
+<div align="center">
 
-Supacron installs a small Supabase heartbeat and runs it from Cloudflare Workers Cron. It is built for one job: keep a selected Supabase project receiving narrow database activity without adding a backend, dashboard, hosted service, or account system.
+<h1>&#9201; Supacron</h1>
 
-```txt
-Cloudflare Cron Trigger -> scheduled Worker -> Supabase REST RPC -> one heartbeat row update
-```
+<hr />
 
-Supacron uses your own Supabase and Cloudflare accounts through the official CLIs. It does not ask for database passwords, connection strings, service-role keys, Supabase access tokens, or Cloudflare API tokens.
+<h3>Keep a Supabase project warm with one Cloudflare Cron heartbeat.</h3>
+
+<p><em>No backend. No service-role key. No stored local secrets. Your accounts -> official CLIs -> scheduled Worker -> protected Supabase RPC.</em></p>
+
+<br />
+
+<a href="#install"><img alt="Get Started" src="https://img.shields.io/badge/GET_STARTED-64D80D?style=for-the-badge&labelColor=64D80D&color=64D80D" /></a>
+
+<br />
+<br />
+
+<img alt="version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-64D80D?style=flat-square&labelColor=111827" />
+<img alt="license MIT" src="https://img.shields.io/badge/license-MIT-64D80D?style=flat-square&labelColor=111827" />
+<img alt="platform CLI" src="https://img.shields.io/badge/platform-CLI-64D80D?style=flat-square&labelColor=111827" />
+<img alt="runtime Node 20+" src="https://img.shields.io/badge/runtime-Node_20+-64D80D?style=flat-square&labelColor=111827" />
+
+<br />
+<br />
+
+<img alt="Supabase" src="https://img.shields.io/badge/SUPABASE-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white&labelColor=111827" />
+<img alt="Cloudflare" src="https://img.shields.io/badge/CLOUDFLARE-F38020?style=for-the-badge&logo=cloudflare&logoColor=white&labelColor=111827" />
+<img alt="Workers" src="https://img.shields.io/badge/WORKERS-F6821F?style=for-the-badge&logo=cloudflareworkers&logoColor=white&labelColor=111827" />
+<img alt="Wrangler" src="https://img.shields.io/badge/WRANGLER-222222?style=for-the-badge&logo=cloudflare&logoColor=white&labelColor=111827" />
+<img alt="Secret safe" src="https://img.shields.io/badge/SECRET_SAFE-0F172A?style=for-the-badge&logo=shieldsdotio&logoColor=white&labelColor=111827" />
+
+</div>
 
 ## Install
 
@@ -14,7 +37,7 @@ Supacron uses your own Supabase and Cloudflare accounts through the official CLI
 npx supacron init
 ```
 
-`init` guides you through:
+`init` walks through the full secure setup:
 
 - Supabase browser login through the official CLI.
 - Project selection.
@@ -26,12 +49,20 @@ npx supacron init
 - Final scheduled-only Worker deployment.
 - A local non-secret installation manifest.
 
+## Runtime Path
+
+```txt
+Cloudflare Cron Trigger -> scheduled Worker -> Supabase REST RPC -> one heartbeat row update
+```
+
+Supacron is intentionally narrow. It has no hosted backend, dashboard, account system, billing, analytics, queue, GitHub integration, or Vercel path.
+
 ## Requirements
 
 - Node.js 20 or newer.
 - A Supabase account with access to the target project.
 - A Cloudflare account that can deploy Workers.
-- The official provider CLIs available through `npx` during setup.
+- Official provider CLIs available through `npx` during setup.
 
 Supacron pins the Wrangler package it invokes and runs provider commands without a shell.
 
@@ -83,7 +114,9 @@ Locally:
 
 ## Security Boundary
 
-Supacron never stores clear heartbeat secrets locally. It generates the heartbeat secret in memory, stores only a SHA-256 digest in Supabase SQL, and streams the clear value to Wrangler over stdin so Cloudflare stores it as a Worker secret.
+Supacron never asks for database passwords, connection strings, service-role keys, Supabase access tokens, or Cloudflare API tokens.
+
+It generates the heartbeat secret in memory, stores only a SHA-256 digest in Supabase SQL, and streams the clear value to Wrangler over stdin so Cloudflare stores it as a Worker secret. The clear heartbeat secret is never written to command arguments, generated files, the local manifest, or logs.
 
 The final Worker has no public HTTP handler. During installation, Supacron briefly deploys a secret-protected verification endpoint, calls it once, deletes its temporary secret, then deploys the final scheduled-only Worker.
 
