@@ -42,7 +42,7 @@ export function listProjects({ run = runNpx } = {}) {
     const result = run(
       SUPABASE_PACKAGE,
       "supabase",
-      ["projects", "list", "--output-format", "json", "--agent", "no"],
+      ["projects", "list", "--output", "json"],
       { displayName: "Supabase project discovery" }
     );
     return parseProjectsJson(result.stdout);
@@ -58,7 +58,7 @@ export function login({ run = runNpx } = {}) {
   return run(
     SUPABASE_PACKAGE,
     "supabase",
-    ["login", "--name", "supacron", "--agent", "no"],
+    ["login", "--name", "supacron"],
     {
       displayName: "Supabase browser login",
       interactive: true,

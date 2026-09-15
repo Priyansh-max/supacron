@@ -37,7 +37,25 @@ test("runCommand errors never echo command arguments or secret output", () => {
       assert.equal(error.exitCode, 7);
       assert.equal(error.message, "test command failed with exit code 7.");
       assert.equal(error.stderr, "[REDACTED]");
-      assert.doesNotMatch(`${error.message}${error.stderr}`, new RegExp(secret));
+      assert.equal(error.stdout, "");
+      assert.doesNotMatch(`${error.message}${error.stdout}${error.stderr}`, new RegExp(secret));
+      return true;
+    }
+  );
+});
+
+test("runCommand preserves redacted stdout on provider failures", () => {
+  assert.throws(
+    () => runCommand(
+      process.execPath,
+      ["-e", "process.stdout.write('usage details'); process.exit(2)"],
+      { displayName: "provider command" }
+    ),
+    (error) => {
+      assert.ok(error instanceof CommandError);
+      assert.equal(error.exitCode, 2);
+      assert.equal(error.stdout, "usage details");
+      assert.equal(error.stderr, "");
       return true;
     }
   );

@@ -35,10 +35,8 @@ export function listPublishableKeys({ projectRef, run = runNpx }) {
       "api-keys",
       "--project-ref",
       projectRef,
-      "--output-format",
-      "json",
-      "--agent",
-      "no"
+      "--output",
+      "json"
     ],
     { displayName: "Supabase publishable-key discovery" }
   );

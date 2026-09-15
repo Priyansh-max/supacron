@@ -24,6 +24,10 @@ try {
   }
 } catch (error) {
   console.error(`\n${error.message}`);
+  const details = [error.stderr, error.stdout].filter(Boolean).join("\n").trim();
+  if (details) {
+    console.error(details);
+  }
   process.exitCode = 1;
 }
 

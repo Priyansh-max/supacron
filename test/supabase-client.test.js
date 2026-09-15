@@ -66,7 +66,7 @@ test("listProjects uses only the safe project-list command", () => {
 
   assert.equal(projects.length, 1);
   assert.deepEqual(calls[0].args, [
-    "projects", "list", "--output-format", "json", "--agent", "no"
+    "projects", "list", "--output", "json"
   ]);
   assert.equal(calls[0].args.includes("api-keys"), false);
   assert.equal(calls[0].args.includes("--reveal"), false);
@@ -92,7 +92,7 @@ test("login delegates to the official browser flow without a token argument", ()
     }
   });
 
-  assert.deepEqual(calls[0].args, ["login", "--name", "supacron", "--agent", "no"]);
+  assert.deepEqual(calls[0].args, ["login", "--name", "supacron"]);
   assert.equal(calls[0].args.includes("--token"), false);
   assert.equal(calls[0].options.interactive, true);
 });

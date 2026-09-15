@@ -3,10 +3,11 @@ import { spawnSync } from "node:child_process";
 const PACKAGE_SPEC = /^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+@[0-9]+\.[0-9]+\.[0-9]+$/i;
 
 export class CommandError extends Error {
-  constructor(message, { exitCode = null, stderr = "" } = {}) {
+  constructor(message, { exitCode = null, stdout = "", stderr = "" } = {}) {
     super(message);
     this.name = "CommandError";
     this.exitCode = exitCode;
+    this.stdout = stdout;
     this.stderr = stderr;
   }
 }
@@ -65,14 +66,15 @@ export function runCommand(command, args = [], options = {}) {
 
   if (result.error) {
     if (result.error.code === "ETIMEDOUT") {
-      throw new CommandError(`${displayName} timed out.`, { stderr });
+      throw new CommandError(`${displayName} timed out.`, { stdout, stderr });
     }
-    throw new CommandError(`${displayName} could not start: ${result.error.message}`, { stderr });
+    throw new CommandError(`${displayName} could not start: ${result.error.message}`, { stdout, stderr });
   }
 
   if (result.status !== 0) {
     throw new CommandError(`${displayName} failed with exit code ${result.status}.`, {
       exitCode: result.status,
+      stdout,
       stderr
     });
   }

@@ -36,10 +36,8 @@ export function executeProjectSql({
         projectRef,
         "--file",
         sqlPath,
-        "--output-format",
-        "json",
-        "--agent",
-        "no"
+        "--output",
+        "json"
       ],
       {
         displayName: operation,

@@ -26,6 +26,8 @@ test("executeProjectSql passes SQL through a restricted temporary file", () => {
     "db", "query", "--project-ref", "abcdefghijklmnopqrst"
   ]);
   assert.equal(captured.args.includes(sql), false);
+  assert.equal(captured.args.includes("--output"), true);
+  assert.equal(captured.args.includes("--output-format"), false);
   assert.equal(fs.existsSync(sqlPath), false);
 });
 

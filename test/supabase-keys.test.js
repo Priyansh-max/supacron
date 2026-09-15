@@ -45,10 +45,8 @@ test("listPublishableKeys never requests revealed secret keys", () => {
     "api-keys",
     "--project-ref",
     "abcdefghijklmnopqrst",
-    "--output-format",
-    "json",
-    "--agent",
-    "no"
+    "--output",
+    "json"
   ]);
   assert.equal(calls[0].args.includes("--reveal"), false);
 });
