@@ -45,7 +45,7 @@ export function listPublishableKeys({ projectRef, run = runNpx }) {
       "--output",
       "json"
     ],
-    { displayName: "Supabase public API-key discovery" }
+    { displayName: "Supabase public API-key discovery", rawStdout: true }
   );
 
   return parsePublishableKeysJson(result.stdout);

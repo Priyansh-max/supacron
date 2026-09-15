@@ -52,6 +52,7 @@ test("listPublishableKeys never requests revealed secret keys", () => {
     "json"
   ]);
   assert.equal(calls[0].args.includes("--reveal"), false);
+  assert.equal(calls[0].options.rawStdout, true);
 });
 
 test("listPublishableKeys rejects an invalid project before execution", () => {

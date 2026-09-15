@@ -43,7 +43,8 @@ export function runCommand(command, args = [], options = {}) {
     input,
     interactive = false,
     secrets = [],
-    timeoutMs = 60_000
+    timeoutMs = 60_000,
+    rawStdout = false
   } = options;
 
   if (interactive && input !== undefined) {
@@ -79,7 +80,7 @@ export function runCommand(command, args = [], options = {}) {
     });
   }
 
-  return { stdout, stderr, exitCode: result.status };
+  return { stdout: rawStdout ? result.stdout : stdout, stderr, exitCode: result.status };
 }
 
 function shouldUseShell(command) {

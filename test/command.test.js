@@ -61,6 +61,31 @@ test("runCommand preserves redacted stdout on provider failures", () => {
   );
 });
 
+test("runCommand can return raw stdout on success while failures stay redacted", () => {
+  const secret = "never-print-this-success-secret";
+  const success = runCommand(
+    process.execPath,
+    ["-e", `process.stdout.write('${secret}')`],
+    { secrets: [secret], rawStdout: true }
+  );
+
+  assert.equal(success.stdout, secret);
+
+  assert.throws(
+    () => runCommand(
+      process.execPath,
+      ["-e", `process.stdout.write('${secret}'); process.exit(2)`],
+      { displayName: "provider command", secrets: [secret], rawStdout: true }
+    ),
+    (error) => {
+      assert.ok(error instanceof CommandError);
+      assert.equal(error.stdout, "[REDACTED]");
+      assert.doesNotMatch(`${error.message}${error.stdout}${error.stderr}`, new RegExp(secret));
+      return true;
+    }
+  );
+});
+
 test("runNpx rejects unpinned packages before execution", () => {
   assert.throws(
     () => runNpx("wrangler@latest", "wrangler", ["--version"]),
