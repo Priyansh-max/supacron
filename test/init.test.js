@@ -100,7 +100,7 @@ test("init manual mode fallback prints SQL, verifies, deploys Cloudflare, and wr
   assert.equal(manifestWrites[0].security.localSecretStorage, false);
   assert.equal(manifestWrites[0].database.setupMode, "manual");
   assert.match(output.text(), /Manual Supabase SQL/);
-  assert.match(output.text(), /Supacron setup complete/);
+  assert.match(output.text(), /Setup complete/);
   assert.doesNotMatch(output.text(), /sb_publishable_abcdefghijklmnopqrstuvwxyz/);
   assert.doesNotMatch(output.text(), /aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/);
 });

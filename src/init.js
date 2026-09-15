@@ -28,6 +28,18 @@ import {
   verifyDeployedWorker,
 } from "./cloudflare/deploy.js";
 import { createManifest, writeManifest } from "./lib/manifest.js";
+import {
+  bullet,
+  color,
+  command,
+  keyValue,
+  muted,
+  renderBanner,
+  section,
+  status,
+  strong,
+  write,
+} from "./ui.js";
 
 const SETUP_MODES = [
   {
@@ -228,10 +240,9 @@ export async function setupDatabase({
   verifyDbStructure,
 }) {
   if (mode === "manual") {
-    write(out, "");
-    write(out, "Manual Supabase SQL");
-    write(out, "Open the SQL editor link below, run this SQL, then come back here.");
-    write(out, projectSqlEditorUrl(project.ref));
+    section(out, "Manual Supabase SQL");
+    status(out, "info", "Open the SQL editor link below, run this SQL, then come back here.");
+    keyValue(out, "SQL editor", projectSqlEditorUrl(project.ref));
     write(out, "");
     write(out, installSql);
     await requireApproval({
@@ -242,9 +253,9 @@ export async function setupDatabase({
       question: "I have run the SQL successfully in Supabase.",
       defaultValue: false,
     });
-    write(out, "Linking Supabase project for CLI SQL access...");
+    status(out, "info", "Linking Supabase project for CLI SQL access...");
     linkProject({ projectRef: project.ref });
-    write(out, "Supabase project linked.");
+    status(out, "success", "Supabase project linked.");
   } else if (mode === "automatic") {
     await requireApproval({
       rl,
@@ -254,9 +265,10 @@ export async function setupDatabase({
       question: "Run the shown SQL using the official Supabase CLI now?",
       defaultValue: false,
     });
-    write(out, "Linking Supabase project for CLI SQL access...");
+    status(out, "info", "Linking Supabase project for CLI SQL access...");
     linkProject({ projectRef: project.ref });
-    write(out, "Supabase project linked.");
+    status(out, "success", "Supabase project linked.");
+    status(out, "info", "Applying Supabase SQL with the official CLI...");
     executeSql({
       projectRef: project.ref,
       sql: installSql,
@@ -273,7 +285,7 @@ export async function setupDatabase({
   if (!structure.ok) {
     throw new Error("Supabase verification failed: expected table, RPC, or RLS policy was missing.");
   }
-  write(out, "Supabase verification passed.");
+  status(out, "success", "Supabase verification passed.");
   return structure;
 }
 
@@ -293,8 +305,8 @@ export async function deployCloudflareCron({
   const removeSecret = dependencies.deleteWorkerSecret || deleteWorkerSecret;
   const verifyWorker = dependencies.verifyWorker || verifyDeployedWorker;
 
-  write(out, "");
-  write(out, "Deploying temporary verification Worker...");
+  section(out, "Cloudflare deployment");
+  status(out, "info", "Deploying temporary verification Worker...");
   const bootstrap = deploy({
     accountId: account.id,
     workerName,
@@ -305,7 +317,7 @@ export async function deployCloudflareCron({
 
   let verificationSecretWritten = false;
   try {
-    write(out, "Writing Cloudflare Worker secrets through Wrangler stdin...");
+    status(out, "info", "Writing Cloudflare Worker secrets through Wrangler stdin...");
     for (const [key, value] of [
       ["SUPABASE_URL", supabaseUrl],
       ["SUPABASE_PUBLISHABLE_KEY", publishableKey],
@@ -323,7 +335,7 @@ export async function deployCloudflareCron({
       }
     }
 
-    write(out, "Redeploying verification Worker with required secret bindings...");
+    status(out, "info", "Redeploying verification Worker with required secret bindings...");
     const verificationDeploy = deploy({
       accountId: account.id,
       workerName,
@@ -333,13 +345,13 @@ export async function deployCloudflareCron({
     });
     const workersDevUrl = verificationDeploy.workersDevUrl || bootstrap.workersDevUrl;
 
-    write(out, "Running one verification heartbeat...");
+    status(out, "info", "Running one verification heartbeat...");
     const workerCheck = await verifyWorker({
       workersDevUrl,
       verifySecret,
     });
 
-    write(out, "Removing temporary verification secret...");
+    status(out, "info", "Removing temporary verification secret...");
     removeSecret({
       accountId: account.id,
       workerName,
@@ -347,7 +359,7 @@ export async function deployCloudflareCron({
     });
     verificationSecretWritten = false;
 
-    write(out, "Deploying final scheduled Worker with no public HTTP route...");
+    status(out, "info", "Deploying final scheduled Worker with no public HTTP route...");
     deploy({
       accountId: account.id,
       workerName,
@@ -370,15 +382,15 @@ export async function deployCloudflareCron({
           key: "SUPACRON_VERIFY_SECRET",
         });
       } catch {
-        write(out, "Warning: temporary verification secret cleanup failed. Remove SUPACRON_VERIFY_SECRET in Cloudflare.");
+        status(out, "warn", "Temporary verification secret cleanup failed. Remove SUPACRON_VERIFY_SECRET in Cloudflare.");
       }
     }
   }
 }
 
 async function discoverPublishableKey({ project, dependencies, out }) {
-  write(out, "");
-  write(out, "Discovering Supabase public API key without revealing secret keys...");
+  section(out, "Supabase public key");
+  status(out, "info", "Discovering public API key without revealing secret keys...");
   const keys = await (dependencies.listPublishableKeys || listPublishableKeys)({
     projectRef: project.ref,
   });
@@ -386,7 +398,7 @@ async function discoverPublishableKey({ project, dependencies, out }) {
     throw new Error("No Supabase public anon/publishable key was returned. Supacron will not ask for secret/service-role keys.");
   }
 
-  write(out, `Found ${keys.length} public API key(s). The key value is not printed.`);
+  status(out, "success", `Found ${keys.length} public API key(s). The key value is not printed.`);
   return keys[0];
 }
 
@@ -461,8 +473,8 @@ async function chooseSchedule({ parsed, rl, out }) {
     return parsed.values.schedule;
   }
 
-  write(out, "");
-  write(out, `Cron schedule (${DEFAULT_SCHEDULE} recommended)`);
+  section(out, "Schedule");
+  write(out, `  ${muted(out, "Recommended ")}${DEFAULT_SCHEDULE}`);
   const answer = await askRaw(rl, "> ");
   return answer.trim() || DEFAULT_SCHEDULE;
 }
@@ -536,13 +548,13 @@ async function chooseFromInteractiveList({ question, choices }) {
       }
 
       output.write("\x1b[?25l");
-      output.write(`\x1b[2K${question}\n`);
+      output.write(`\x1b[2K${color(output, "blue", strong(output, question))}\n`);
       for (const [index, choice] of choices.entries()) {
         const marker = index === selectedIndex ? ">" : " ";
         const detail = choice.description ? ` - ${choice.description}` : "";
         output.write(`\x1b[2K${marker} ${choice.label}${detail}\n`);
       }
-      output.write("\x1b[2KUse arrow keys and Enter.\n");
+      output.write(`\x1b[2K${muted(output, "Use arrow keys and Enter.")}\n`);
       rendered = true;
     }
 
@@ -580,7 +592,7 @@ async function chooseFromInteractiveList({ question, choices }) {
 
 async function requireApproval({ rl, out, parsed, flag, question, defaultValue }) {
   if (parsed.flags.has(flag)) {
-    write(out, `${question} yes`);
+    status(out, "success", `${question} yes`);
     return true;
   }
 
@@ -595,48 +607,45 @@ async function requireApproval({ rl, out, parsed, flag, question, defaultValue }
 }
 
 function writeDatabasePlan({ out, project, installSql }) {
-  write(out, "");
-  write(out, "Supabase change plan");
-  write(out, `Project: ${project.name} (${project.ref})`);
-  write(out, "Supacron will create or replace only these objects after approval:");
-  write(out, "  - schema: supacron");
-  write(out, "  - table: supacron.heartbeat");
-  write(out, "  - RPC: public.supacron_ping(text)");
-  write(out, "  - RLS/revokes/grants for the heartbeat table and RPC");
-  write(out, "It will not request database passwords, connection strings, service-role keys, or Supabase access tokens.");
-  write(out, `SQL preview: ${installSql.split(/\r?\n/).length} lines, heartbeat secret stored only as SHA-256 digest.`);
+  section(out, "Supabase change plan");
+  keyValue(out, "Project", `${project.name} (${project.ref})`);
+  keyValue(out, "SQL", `${installSql.split(/\r?\n/).length} lines, heartbeat secret stored only as SHA-256 digest`);
+  bullet(out, "schema: supacron");
+  bullet(out, "table: supacron.heartbeat");
+  bullet(out, "RPC: public.supacron_ping(text)");
+  bullet(out, "RLS, revokes, and grants for Supacron-owned objects");
+  write(out, muted(out, "  No database passwords, connection strings, service-role keys, or Supabase access tokens."));
 }
 
 function writeCloudflarePlan({ out, account, workerName, schedule }) {
-  write(out, "");
-  write(out, "Cloudflare change plan");
-  write(out, `Account: ${account.name} (${account.id})`);
-  write(out, `Worker: ${workerName}`);
-  write(out, `Schedule: ${schedule}`);
-  write(out, "Supacron will deploy through Wrangler, stream secrets through stdin, run one temporary verification endpoint,");
-  write(out, "remove that verification secret, then deploy the final Worker without a public HTTP handler.");
-  write(out, `Secret bindings used: ${SECRET_BINDINGS.join(", ")}`);
+  section(out, "Cloudflare change plan");
+  keyValue(out, "Account", `${account.name} (${account.id})`);
+  keyValue(out, "Worker", workerName);
+  keyValue(out, "Schedule", schedule);
+  bullet(out, "deploy through Wrangler");
+  bullet(out, "stream Worker secrets through stdin");
+  bullet(out, "run one temporary verification endpoint");
+  bullet(out, "remove the verification secret and deploy the final private cron Worker");
+  write(out, muted(out, `  Bindings: ${SECRET_BINDINGS.join(", ")}`));
 }
 
 function writeFinalReport({ out, report }) {
-  write(out, "");
-  write(out, "Supacron setup complete");
-  write(out, `Supabase project: ${report.project.name} (${report.project.ref})`);
-  write(out, `Cloudflare account: ${report.account.name} (${report.account.id})`);
-  write(out, `Worker: ${report.workerName}`);
-  write(out, `Cron schedule: ${report.schedule}`);
-  write(out, `Last heartbeat: ${report.heartbeat.lastPingAt || "verified"}`);
-  write(out, "");
-  write(out, "Verify and manage later:");
-  write(out, `Supabase project: ${report.supabaseDashboardUrl}`);
-  write(out, `Supabase SQL editor: ${report.sqlEditorUrl}`);
-  write(out, `Cloudflare Worker: ${report.cloudflareDashboardUrl}`);
-  write(out, `Local manifest: ${report.manifestFile}`);
-  write(out, "");
-  write(out, "Lifecycle commands:");
-  write(out, `supacron status --project-ref ${report.project.ref}`);
-  write(out, `supacron repair --project-ref ${report.project.ref}`);
-  write(out, `supacron uninstall --project-ref ${report.project.ref}`);
+  section(out, "Setup complete");
+  status(out, "success", "Supacron is installed and verified.");
+  keyValue(out, "Supabase", `${report.project.name} (${report.project.ref})`);
+  keyValue(out, "Cloudflare", `${report.account.name} (${report.account.id})`);
+  keyValue(out, "Worker", report.workerName);
+  keyValue(out, "Schedule", report.schedule);
+  keyValue(out, "Heartbeat", report.heartbeat.lastPingAt || "verified");
+  section(out, "Manage later");
+  keyValue(out, "Supabase", report.supabaseDashboardUrl);
+  keyValue(out, "SQL editor", report.sqlEditorUrl);
+  keyValue(out, "Cloudflare", report.cloudflareDashboardUrl);
+  keyValue(out, "Manifest", report.manifestFile);
+  section(out, "Lifecycle commands");
+  write(out, `  ${command(out, `supacron status --project-ref ${report.project.ref}`)}`);
+  write(out, `  ${command(out, `supacron repair --project-ref ${report.project.ref}`)}`);
+  write(out, `  ${command(out, `supacron uninstall --project-ref ${report.project.ref}`)}`);
 }
 
 function requireNonEmptyProjects(projects) {
@@ -658,14 +667,7 @@ function randomHex(byteLength, randomBytes = crypto.randomBytes) {
 }
 
 function writeBanner(out) {
-  write(out, "");
-  write(out, BANNER);
-  write(out, "Supacron secure setup");
-  write(out, "Cloudflare Workers Cron -> Supabase heartbeat, using only official CLIs.");
-}
-
-function write(out, line = "") {
-  out.write(`${line}\n`);
+  renderBanner(out, BANNER);
 }
 
 async function askRaw(rl, question) {
