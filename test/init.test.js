@@ -38,6 +38,8 @@ test("init observe mode lists project and makes no changes", async () => {
 
   assert.equal(result.changed, false);
   assert.deepEqual(calls, ["list-projects"]);
+  assert.match(output.text(), /____/);
+  assert.match(output.text(), /Supacron secure setup/);
   assert.match(output.text(), /Observe-only report/);
   assert.doesNotMatch(output.text(), /sb_publishable_/);
 });

@@ -53,6 +53,15 @@ const SECRET_BINDINGS = [
   "SUPACRON_VERIFY_SECRET",
 ];
 
+const BANNER = [
+  " ____",
+  "/ ___| _   _ _ __   __ _  ___ _ __ ___  _ __",
+  "\\___ \\| | | | '_ \\ / _` |/ __| '__/ _ \\| '_ \\",
+  " ___) | |_| | |_) | (_| | (__| | | (_) | | | |",
+  "|____/ \\__,_| .__/ \\__,_|\\___|_|  \\___/|_| |_|",
+  "            |_|",
+].join("\n");
+
 export async function init(args = [], dependencies = {}) {
   ensureNodeVersion(dependencies.nodeVersion || process.versions.node);
 
@@ -62,9 +71,7 @@ export async function init(args = [], dependencies = {}) {
   const shouldCloseRl = !dependencies.rl;
 
   try {
-    write(out, "");
-    write(out, "Supacron secure setup");
-    write(out, "Cloudflare Workers Cron -> Supabase heartbeat, using only official CLIs.");
+    writeBanner(out);
 
     const projects = await discoverSupabaseProjects(dependencies, out);
     const project = await chooseProject({ projects, parsed, rl, out });
@@ -585,6 +592,13 @@ function requireNonEmptyAccounts(accounts) {
 
 function randomHex(byteLength, randomBytes = crypto.randomBytes) {
   return randomBytes(byteLength).toString("hex");
+}
+
+function writeBanner(out) {
+  write(out, "");
+  write(out, BANNER);
+  write(out, "Supacron secure setup");
+  write(out, "Cloudflare Workers Cron -> Supabase heartbeat, using only official CLIs.");
 }
 
 function write(out, line = "") {
