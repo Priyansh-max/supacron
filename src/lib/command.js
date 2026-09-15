@@ -54,7 +54,7 @@ export function runCommand(command, args = [], options = {}) {
     encoding: "utf8",
     env: env ? { ...process.env, ...env } : process.env,
     input,
-    shell: false,
+    shell: shouldUseShell(command),
     stdio: interactive ? "inherit" : ["pipe", "pipe", "pipe"],
     timeout: timeoutMs,
     windowsHide: true
@@ -78,6 +78,10 @@ export function runCommand(command, args = [], options = {}) {
   }
 
   return { stdout, stderr, exitCode: result.status };
+}
+
+function shouldUseShell(command) {
+  return process.platform === "win32" && /\.(?:cmd|bat)$/i.test(command);
 }
 
 export function runNpx(packageSpec, binary, args = [], options = {}) {

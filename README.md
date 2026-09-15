@@ -34,14 +34,14 @@
 ## Install
 
 ```bash
-npx supacron init
+npx supacron setup
 ```
 
-`init` walks through the full secure setup:
+`setup` walks through the full secure setup and runs the provider CLI commands for you after approval:
 
 - Supabase browser login through the official CLI.
 - Project selection.
-- SQL setup in observe, manual, or automatic mode.
+- Automatic SQL setup by default, with manual and observe modes available.
 - Database structure verification.
 - Cloudflare browser login through Wrangler.
 - Worker Cron deployment.
@@ -62,32 +62,32 @@ Supacron is intentionally narrow. It has no hosted backend, dashboard, account s
 - Node.js 20 or newer.
 - A Supabase account with access to the target project.
 - A Cloudflare account that can deploy Workers.
-- Official provider CLIs available through `npx` during setup.
+- Official provider CLIs available through `npx` during setup. Supacron invokes them internally; you should not have to run Wrangler or Supabase commands by hand during the guided flow.
 
-Supacron pins the Wrangler package it invokes and runs provider commands without a shell.
+Supacron pins the provider CLI packages it invokes and runs major setup commands inside the guided installer.
 
 ## Setup Modes
-
-### Manual SQL
-
-```bash
-npx supacron init --mode manual
-```
-
-Recommended. Supacron prints the exact SQL for you to run in Supabase SQL Editor, then verifies the installed objects. Supacron never receives a database-write credential in this mode.
 
 ### Automatic SQL
 
 ```bash
-npx supacron init --mode automatic
+npx supacron setup --mode automatic
 ```
 
-Supacron shows the same SQL and asks again before applying it. If the required scoped provider authorization is not available, use manual mode.
+Recommended and used by default. Supacron shows the SQL, asks again, applies it with the official Supabase CLI, verifies the database objects, then continues into Cloudflare deployment. If the required scoped provider authorization is not available, use manual mode.
+
+### Manual SQL
+
+```bash
+npx supacron setup --mode manual
+```
+
+Fallback mode. Supacron prints the exact SQL for you to run in Supabase SQL Editor, then verifies the installed objects. Supacron never receives a database-write credential in this mode.
 
 ### Observe Only
 
 ```bash
-npx supacron init --mode observe
+npx supacron setup --mode observe
 ```
 
 Lists and inspects what Supacron can see, but does not change Supabase or Cloudflare.
@@ -125,7 +125,7 @@ The local manifest is validated as non-secret data. Fields or values that look l
 ## Commands
 
 ```bash
-npx supacron init
+npx supacron setup
 npx supacron status --project-ref <ref>
 npx supacron repair --project-ref <ref>
 npx supacron uninstall --project-ref <ref>

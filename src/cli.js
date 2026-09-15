@@ -7,10 +7,8 @@ const command = process.argv[2] ?? "help";
 const args = process.argv.slice(3);
 
 try {
-  if (command === "init") {
+  if (command === "setup" || command === "init") {
     await init(args);
-  } else if (command === "setup") {
-    throw new Error("The setup command has been replaced by `supacron init`.");
   } else if (command === "status") {
     await status(args);
   } else if (command === "repair") {
@@ -33,19 +31,20 @@ function printHelp() {
   console.log(`supacron
 
 Usage:
-  supacron init
-  supacron init --mode manual|automatic|observe
-  supacron init --project-ref <ref> --account-id <id>
+  supacron setup
+  supacron setup --mode automatic|manual|observe
+  supacron setup --project-ref <ref> --account-id <id>
   supacron status --project-ref <ref>
   supacron uninstall --project-ref <ref>
   supacron repair --project-ref <ref>
 
 Commands:
-  init     Securely set up Supabase heartbeat + Cloudflare Workers Cron.
+  setup    End-to-end guided Supabase heartbeat + Cloudflare Workers Cron installer.
+  init     Alias for setup.
   status   Verify a saved Supacron installation without local secrets.
   uninstall Remove the Worker, Supabase objects, and local manifest after approval.
   repair   Redeploy the scheduled Worker config from the saved manifest.
 
-Init never asks for database passwords, connection strings, service-role keys, Supabase access tokens, or Cloudflare API tokens.
+Setup never asks for database passwords, connection strings, service-role keys, Supabase access tokens, or Cloudflare API tokens.
 `);
 }

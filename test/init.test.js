@@ -42,17 +42,17 @@ test("init observe mode lists project and makes no changes", async () => {
   assert.doesNotMatch(output.text(), /sb_publishable_/);
 });
 
-test("init manual mode prints SQL, verifies, deploys Cloudflare, and writes no secret output", async () => {
+test("init manual mode fallback prints SQL, verifies, deploys Cloudflare, and writes no secret output", async () => {
   const calls = [];
   const output = createOutput();
   const manifestWrites = [];
   const randomBytes = (length) => Buffer.alloc(length, "a");
 
-  const result = await init(["--approve-cloudflare", "--confirm-manual-sql"], {
+  const result = await init(["--mode", "manual", "--approve-cloudflare", "--confirm-manual-sql"], {
     nodeVersion: "22.16.0",
     now: "2026-09-14T15:00:00.000Z",
     out: output,
-    rl: createRl(["1", "", "1", ""]),
+    rl: createRl(["1", "1", ""]),
     randomBytes,
     listSupabaseProjects: () => [PROJECT],
     verifyDbStructure: ({ projectRef }) => {
@@ -112,15 +112,15 @@ test("init manual mode prints SQL, verifies, deploys Cloudflare, and writes no s
   assert.doesNotMatch(output.text(), /aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/);
 });
 
-test("init automatic mode runs shown SQL only after explicit approval", async () => {
+test("init defaults to automatic guided setup and runs shown SQL only after explicit approval", async () => {
   const calls = [];
   const output = createOutput();
 
-  await init(["--mode", "automatic", "--approve-sql", "--approve-cloudflare"], {
+  await init(["--approve-sql", "--approve-cloudflare"], {
     nodeVersion: "22.16.0",
     now: "2026-09-14T15:00:00.000Z",
     out: output,
-    rl: createRl(["1", "1", "*/15 * * * *"]),
+    rl: createRl(["1", "", "1", "*/15 * * * *"]),
     randomBytes: (length) => Buffer.alloc(length, "b"),
     listSupabaseProjects: () => [PROJECT],
     executeSql: (request) => {

@@ -30,14 +30,14 @@ import { createManifest, writeManifest } from "./lib/manifest.js";
 
 const SETUP_MODES = [
   {
-    value: "manual",
-    label: "Manual SQL (recommended)",
-    description: "Supacron prints SQL; you run it in Supabase, then Supacron verifies it.",
+    value: "automatic",
+    label: "Automatic guided setup (recommended)",
+    description: "Supacron applies the shown SQL with the official Supabase CLI after approval.",
   },
   {
-    value: "automatic",
-    label: "Automatic SQL",
-    description: "Supacron runs the shown SQL with the official Supabase CLI after approval.",
+    value: "manual",
+    label: "Manual SQL fallback",
+    description: "Supacron prints SQL for you to run in Supabase, then verifies it.",
   },
   {
     value: "observe",
@@ -452,7 +452,7 @@ async function chooseSetupMode({ parsed, rl, out }) {
 
   const selected = await askRaw(rl, "> ");
   if (!selected.trim()) {
-    return "manual";
+    return "automatic";
   }
 
   const number = Number.parseInt(selected, 10);
