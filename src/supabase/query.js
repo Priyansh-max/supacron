@@ -6,7 +6,7 @@ import { runNpx } from "../lib/command.js";
 
 const PROJECT_REF = /^[a-z0-9]{20}$/;
 
-export function linkProject({ projectRef, run = runNpx }) {
+export function linkProject({ projectRef, run = runNpx, cwd }) {
   if (!PROJECT_REF.test(projectRef ?? "")) {
     throw new Error("Invalid Supabase project reference.");
   }
@@ -16,6 +16,7 @@ export function linkProject({ projectRef, run = runNpx }) {
     "supabase",
     ["link", "--project-ref", projectRef],
     {
+      cwd,
       displayName: "Supabase project link",
       interactive: true,
       timeoutMs: AUTH_TIMEOUT_MS
@@ -27,7 +28,8 @@ export function executeProjectSql({
   projectRef,
   sql,
   operation = "Supabase SQL query",
-  run = runNpx
+  run = runNpx,
+  cwd
 }) {
   if (!PROJECT_REF.test(projectRef ?? "")) {
     throw new Error("Invalid Supabase project reference.");
@@ -58,6 +60,7 @@ export function executeProjectSql({
         "json"
       ],
       {
+        cwd,
         displayName: operation,
         timeoutMs: Math.max(COMMAND_TIMEOUT_MS, 120_000)
       }

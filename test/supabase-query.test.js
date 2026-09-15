@@ -8,6 +8,7 @@ test("linkProject uses the official Supabase link command interactively", () => 
   const calls = [];
   linkProject({
     projectRef: "abcdefghijklmnopqrst",
+    cwd: "C:\\Temp\\supacron-setup-test",
     run(packageSpec, binary, args, options) {
       calls.push({ packageSpec, binary, args, options });
       return { stdout: "", stderr: "", exitCode: 0 };
@@ -16,6 +17,7 @@ test("linkProject uses the official Supabase link command interactively", () => 
 
   assert.equal(calls[0].binary, "supabase");
   assert.deepEqual(calls[0].args, ["link", "--project-ref", "abcdefghijklmnopqrst"]);
+  assert.equal(calls[0].options.cwd, "C:\\Temp\\supacron-setup-test");
   assert.equal(calls[0].options.interactive, true);
 });
 test("executeProjectSql passes SQL through a restricted temporary file", () => {
@@ -26,6 +28,7 @@ test("executeProjectSql passes SQL through a restricted temporary file", () => {
   const result = executeProjectSql({
     projectRef: "abcdefghijklmnopqrst",
     sql,
+    cwd: "C:\\Temp\\supacron-setup-test",
     run(packageSpec, binary, args, options) {
       sqlPath = args[args.indexOf("--file") + 1];
       captured = { packageSpec, binary, args, options };
@@ -37,6 +40,7 @@ test("executeProjectSql passes SQL through a restricted temporary file", () => {
 
   assert.equal(result.stdout, "[]");
   assert.equal(captured.binary, "supabase");
+  assert.equal(captured.options.cwd, "C:\\Temp\\supacron-setup-test");
   assert.deepEqual(captured.args.slice(0, 5), [
     "db", "query", "--linked", "--project-ref", "abcdefghijklmnopqrst"
   ]);

@@ -38,19 +38,13 @@ Usage:
   supacron setup
   supacron setup --mode automatic|manual
   supacron setup --project-ref <ref> --account-id <id>
-  supacron setup --cleanup keep|temp|all --logout none|supabase|cloudflare|all
-  supacron status --project-ref <ref>
-  supacron uninstall --project-ref <ref>
-  supacron repair --project-ref <ref>
+  supacron setup --session remember|logout
 
 Commands:
   setup    End-to-end guided Supabase heartbeat + Cloudflare Workers Cron installer.
   init     Alias for setup.
-  status   Verify a saved Supacron installation without local secrets.
-  uninstall Remove the Worker, Supabase objects, and local manifest after approval.
-  repair   Redeploy the scheduled Worker config from the saved manifest.
 
 Setup never asks for database passwords, connection strings, service-role keys, Supabase access tokens, or Cloudflare API tokens.
-After setup, Supacron can remove local helper files and logout official CLI sessions on request.
+After setup, Supacron removes its temporary setup workspace. You can choose whether official CLI sessions stay remembered or get logged out.
 `);
 }

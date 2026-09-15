@@ -29,13 +29,11 @@ import {
   putWorkerSecret,
   verifyDeployedWorker,
 } from "./cloudflare/deploy.js";
-import { createManifest, writeManifest } from "./lib/manifest.js";
-import { cleanupLocalSetupFiles } from "./local-cleanup.js";
+import { cleanupLocalSetupFiles, createLocalSetupWorkspace } from "./local-cleanup.js";
 import {
   bullet,
   choiceLine,
   color,
-  command,
   keyValue,
   muted,
   renderBanner,
@@ -81,44 +79,16 @@ const SCHEDULE_PRESETS = [
   },
 ];
 
-const LOCAL_CLEANUP_CHOICES = [
+const SESSION_CHOICES = [
   {
-    value: "keep",
-    label: "Keep local helper files (recommended)",
-    description: "Future status, repair, and uninstall commands stay easy.",
+    value: "remember",
+    label: "Remember me",
+    description: "Keep Supabase CLI and Wrangler logged in for future CLI use.",
   },
   {
-    value: "temp",
-    label: "Remove temporary CLI link files",
-    description: "Deletes Supabase link cache created during setup when safe.",
-  },
-  {
-    value: "all",
-    label: "Remove all local Supacron setup files",
-    description: "Deletes temp link cache and the non-secret Supacron manifest.",
-  },
-];
-
-const LOGOUT_CHOICES = [
-  {
-    value: "none",
-    label: "Keep CLI logins (recommended)",
-    description: "Future Supabase and Cloudflare CLI commands will not ask again.",
-  },
-  {
-    value: "supabase",
-    label: "Logout Supabase CLI",
-    description: "Disconnects the official Supabase CLI session.",
-  },
-  {
-    value: "cloudflare",
-    label: "Logout Cloudflare Wrangler",
-    description: "Disconnects the official Wrangler session.",
-  },
-  {
-    value: "all",
-    label: "Logout both CLIs",
-    description: "Disconnects both official CLI sessions.",
+    value: "logout",
+    label: "Logout",
+    description: "Logout from both Supabase CLI and Cloudflare Wrangler.",
   },
 ];
 
@@ -143,8 +113,13 @@ export async function init(args = [], dependencies = {}) {
   const out = dependencies.out || process.stdout;
   const rl = dependencies.rl || await createPromptSession();
   const shouldCloseRl = !dependencies.rl;
+  let setupWorkspace;
 
   try {
+    setupWorkspace = await (dependencies.createLocalSetupWorkspace || createLocalSetupWorkspace)();
+    const executeSql = dependencies.executeSql || ((request) => executeProjectSql({ ...request, cwd: setupWorkspace }));
+    const linkProject = dependencies.linkSupabaseProject || ((request) => linkSupabaseProject({ ...request, cwd: setupWorkspace }));
+
     writeBanner(out);
 
     const projects = await discoverSupabaseProjects(dependencies, out);
@@ -165,8 +140,8 @@ export async function init(args = [], dependencies = {}) {
       parsed,
       rl,
       out,
-      executeSql: dependencies.executeSql || executeProjectSql,
-      linkProject: dependencies.linkSupabaseProject || linkSupabaseProject,
+      executeSql,
+      linkProject,
       verifyDbStructure: dependencies.verifyDbStructure || verifyStructure,
     });
 
@@ -202,36 +177,13 @@ export async function init(args = [], dependencies = {}) {
 
     const heartbeatCheck = await (dependencies.verifyDbHeartbeat || verifyHeartbeat)({
       projectRef: project.ref,
-      execute: dependencies.executeSql || executeProjectSql,
+      execute: executeSql,
     });
     if (!heartbeatCheck.ok) {
       throw new Error("Cloudflare verification ran, but Supabase did not show the heartbeat row yet.");
     }
 
-    const now = dependencies.now || new Date().toISOString();
     const dashboardUrl = cloudflareWorkerUrl(account.id, workerName);
-    const manifest = createManifest({
-      now,
-      projectRef: project.ref,
-      projectName: project.name,
-      region: project.region,
-      supabaseDashboardUrl: projectDashboardUrl(project.ref),
-      supabaseProjectUrl: supabaseUrl,
-      setupMode,
-      databaseVerifiedAt: now,
-      cloudflareAccountId: account.id,
-      cloudflareAccountName: account.name,
-      workerName,
-      workerUrl: deployment.workersDevUrl,
-      schedule,
-      cloudflareDashboardUrl: dashboardUrl,
-      deployedAt: now,
-      verificationStatus: "verified",
-      lastCheckedAt: now,
-      lastHeartbeatAt: heartbeatCheck.lastPingAt || deployment.lastPingAt || now,
-    });
-    const manifestFile = await (dependencies.writeInstallManifest || writeManifest)(manifest);
-
     const report = {
       ok: true,
       mode: setupMode,
@@ -243,13 +195,16 @@ export async function init(args = [], dependencies = {}) {
       supabaseDashboardUrl: projectDashboardUrl(project.ref),
       sqlEditorUrl: projectSqlEditorUrl(project.ref),
       cloudflareDashboardUrl: dashboardUrl,
-      manifestFile,
       heartbeat: heartbeatCheck,
     };
     writeFinalReport({ out, report });
-    report.postSetup = await runPostSetupCleanup({ parsed, rl, out, report, dependencies });
+    report.postSetup = await runPostSetupFinish({ parsed, rl, out, setupWorkspace, dependencies });
+    setupWorkspace = null;
     return report;
   } finally {
+    if (setupWorkspace) {
+      await cleanupSetupWorkspace({ setupWorkspace, dependencies, out: null });
+    }
     if (shouldCloseRl) {
       rl.close();
     }
@@ -381,6 +336,7 @@ export async function deployCloudflareCron({
     verification: true,
     declareSecrets: false,
   });
+  status(out, "success", "Temporary verification Worker deployed.");
 
   let verificationSecretWritten = false;
   try {
@@ -401,6 +357,7 @@ export async function deployCloudflareCron({
         verificationSecretWritten = true;
       }
     }
+    status(out, "success", "Cloudflare Worker secrets written.");
 
     status(out, "info", "Redeploying verification Worker with required secret bindings...");
     const verificationDeploy = deploy({
@@ -411,12 +368,14 @@ export async function deployCloudflareCron({
       declareSecrets: true,
     });
     const workersDevUrl = verificationDeploy.workersDevUrl || bootstrap.workersDevUrl;
+    status(out, "success", "Verification Worker redeployed.");
 
     status(out, "info", "Running one verification heartbeat...");
     const workerCheck = await verifyWorker({
       workersDevUrl,
       verifySecret,
     });
+    status(out, "success", "Verification heartbeat passed.");
 
     status(out, "info", "Removing temporary verification secret...");
     removeSecret({
@@ -425,6 +384,7 @@ export async function deployCloudflareCron({
       key: "SUPACRON_VERIFY_SECRET",
     });
     verificationSecretWritten = false;
+    status(out, "success", "Temporary verification secret removed.");
 
     status(out, "info", "Deploying final scheduled Worker with no public HTTP route...");
     deploy({
@@ -434,6 +394,7 @@ export async function deployCloudflareCron({
       verification: false,
       declareSecrets: true,
     });
+    status(out, "success", "Final scheduled Worker deployed.");
 
     return {
       workersDevUrl,
@@ -455,57 +416,55 @@ export async function deployCloudflareCron({
   }
 }
 
-async function runPostSetupCleanup({ parsed, rl, out, report, dependencies }) {
-  section(out, "Finish and privacy");
-  write(out, muted(out, "  The deployed cron no longer needs this folder to keep running."));
-  write(out, muted(out, "  Official CLI login sessions live in your user profile or keychain, outside this project."));
+async function runPostSetupFinish({ parsed, rl, out, setupWorkspace, dependencies }) {
+  section(out, "Finish");
+  const cleanup = await cleanupSetupWorkspace({ setupWorkspace, dependencies, out });
 
-  const cleanupMode = await choosePostSetupChoice({
-    parsed,
-    rl,
-    out,
-    argName: "cleanup",
-    question: "Local setup files",
-    choices: LOCAL_CLEANUP_CHOICES,
-  });
-
-  const cleanup = await applyLocalCleanup({ cleanupMode, report, dependencies, out });
-
-  const logoutMode = await choosePostSetupChoice({
-    parsed,
-    rl,
-    out,
-    argName: "logout",
-    question: "CLI login sessions",
-    choices: LOGOUT_CHOICES,
-  });
-
-  const logout = await applyCliLogout({ logoutMode, dependencies, out });
+  const sessionMode = await chooseSessionMode({ parsed, rl, out });
+  const session = await applyCliSession({ sessionMode, dependencies, out });
 
   return {
-    cleanupMode,
-    logoutMode,
     cleanup,
-    logout,
+    sessionMode,
+    session,
   };
 }
 
-async function choosePostSetupChoice({ parsed, rl, out, argName, question, choices }) {
-  const value = parsed.values[argName];
-  if (value) {
-    const match = choices.find((choice) => choice.value === value);
-    if (!match) {
-      throw new Error(`Invalid ${argName} option: ${value}`);
+async function cleanupSetupWorkspace({ setupWorkspace, dependencies, out }) {
+  const cleanupFiles = dependencies.cleanupLocalSetupFiles || cleanupLocalSetupFiles;
+  const result = await cleanupFiles({ workspaceDir: setupWorkspace });
+
+  if (out) {
+    if (result.removed.length === 0) {
+      status(out, "success", "Temporary setup workspace already clean.");
+    } else {
+      status(out, "success", "Removed temporary setup workspace.");
     }
-    status(out, "success", `${question}: ${match.label}`);
+
+    for (const skipped of result.skipped) {
+      status(out, "warn", `Could not remove ${skipped.path}: ${skipped.reason}`);
+    }
+  }
+
+  return result;
+}
+
+async function chooseSessionMode({ parsed, rl, out }) {
+  const value = parsed.values.session ?? legacySessionValue(parsed);
+  if (value) {
+    const match = SESSION_CHOICES.find((choice) => choice.value === value);
+    if (!match) {
+      throw new Error(`Invalid session option: ${value}`);
+    }
+    status(out, "success", `CLI session: ${match.label}`);
     return match.value;
   }
 
   return chooseFromList({
     rl,
     out,
-    question,
-    choices: choices.map((choice) => ({
+    question: "CLI session",
+    choices: SESSION_CHOICES.map((choice) => ({
       value: choice.value,
       label: choice.label,
       description: choice.description,
@@ -514,61 +473,37 @@ async function choosePostSetupChoice({ parsed, rl, out, argName, question, choic
   });
 }
 
-async function applyLocalCleanup({ cleanupMode, report, dependencies, out }) {
-  if (cleanupMode === "keep") {
-    status(out, "success", "Kept local helper files for status, repair, and uninstall.");
-    return { removed: [], skipped: [] };
+function legacySessionValue(parsed) {
+  const logoutValue = parsed.values.logout;
+  if (logoutValue === "all") {
+    return "logout";
   }
-
-  const cleanupFiles = dependencies.cleanupLocalSetupFiles || cleanupLocalSetupFiles;
-  const result = await cleanupFiles({
-    manifestFile: report.manifestFile,
-    removeManifest: cleanupMode === "all",
-    cwd: dependencies.cwd || process.cwd(),
-  });
-
-  if (result.removed.length === 0) {
-    status(out, "success", "No matching local setup files were found.");
-  } else {
-    for (const removedPath of result.removed) {
-      status(out, "success", `Removed ${removedPath}`);
-    }
+  if (logoutValue === "none") {
+    return "remember";
   }
-
-  for (const skipped of result.skipped) {
-    status(out, "warn", `Kept ${skipped.path}: ${skipped.reason}`);
+  if (parsed.flags.has("logout")) {
+    return "logout";
   }
-
-  if (cleanupMode === "all") {
-    status(out, "warn", "Local manifest removed. The cron keeps running, but status/repair/uninstall need a saved manifest.");
-  }
-
-  return result;
+  return null;
 }
 
-async function applyCliLogout({ logoutMode, dependencies, out }) {
+async function applyCliSession({ sessionMode, dependencies, out }) {
   const result = { supabase: "kept", cloudflare: "kept" };
-  if (logoutMode === "none") {
-    status(out, "success", "Kept official CLI login sessions.");
+  if (sessionMode === "remember") {
+    status(out, "success", "Remembered official CLI login sessions.");
     return result;
   }
 
-  if (logoutMode === "supabase" || logoutMode === "all") {
-    result.supabase = await runOptionalLogout({
-      label: "Supabase CLI",
-      logout: dependencies.logoutSupabase || supabaseLogout,
-      out,
-    });
-  }
-
-  if (logoutMode === "cloudflare" || logoutMode === "all") {
-    result.cloudflare = await runOptionalLogout({
-      label: "Cloudflare Wrangler",
-      logout: dependencies.logoutCloudflare || cloudflareLogout,
-      out,
-    });
-  }
-
+  result.supabase = await runOptionalLogout({
+    label: "Supabase CLI",
+    logout: dependencies.logoutSupabase || supabaseLogout,
+    out,
+  });
+  result.cloudflare = await runOptionalLogout({
+    label: "Cloudflare Wrangler",
+    logout: dependencies.logoutCloudflare || cloudflareLogout,
+    out,
+  });
   return result;
 }
 
@@ -753,7 +688,7 @@ function supportsInteractiveList(out) {
 
 async function chooseFromInteractiveList({ question, choices }) {
   let selectedIndex = 0;
-  let rendered = false;
+  let renderedLines = 0;
   const input = process.stdin;
   const output = process.stdout;
 
@@ -773,23 +708,29 @@ async function chooseFromInteractiveList({ question, choices }) {
     }
 
     function render() {
-      if (rendered) {
-        output.write(`\x1b[${choices.length + 2}F`);
+      if (renderedLines > 0) {
+        readline.moveCursor(output, 0, -renderedLines);
       } else {
         output.write("\n");
       }
 
       output.write("\x1b[?25l");
-      output.write(`\x1b[2K${color(output, "blue", strong(output, question))}\n`);
       const optionWidth = Math.max(...choices.map((choice) => {
         const detail = choice.description ? ` - ${choice.description}` : "";
         return `${choice.label}${detail}`.length;
       }));
-      for (const [index, choice] of choices.entries()) {
-        output.write(`\x1b[2K${choiceLine(output, choice, index === selectedIndex, optionWidth)}\n`);
+      const lines = [
+        color(output, "blue", strong(output, question)),
+        ...choices.map((choice, index) => choiceLine(output, choice, index === selectedIndex, optionWidth)),
+        muted(output, "Use arrow keys and Enter."),
+      ];
+
+      for (const line of lines) {
+        readline.cursorTo(output, 0);
+        readline.clearLine(output, 0);
+        output.write(`${line}\n`);
       }
-      output.write(`\x1b[2K${muted(output, "Use arrow keys and Enter.")}\n`);
-      rendered = true;
+      renderedLines = lines.length;
     }
 
     function finish(choice) {
@@ -875,11 +816,6 @@ function writeFinalReport({ out, report }) {
   keyValue(out, "Supabase", report.supabaseDashboardUrl);
   keyValue(out, "SQL editor", report.sqlEditorUrl);
   keyValue(out, "Cloudflare", report.cloudflareDashboardUrl);
-  keyValue(out, "Manifest", report.manifestFile);
-  section(out, "Lifecycle commands");
-  write(out, `  ${command(out, `supacron status --project-ref ${report.project.ref}`)}`);
-  write(out, `  ${command(out, `supacron repair --project-ref ${report.project.ref}`)}`);
-  write(out, `  ${command(out, `supacron uninstall --project-ref ${report.project.ref}`)}`);
 }
 
 function requireNonEmptyProjects(projects) {

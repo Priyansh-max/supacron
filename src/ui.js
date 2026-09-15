@@ -71,7 +71,7 @@ export function choiceLine(out, choice, active, width = 0) {
   const label = active ? color(out, "green", strong(out, choice.label)) : choice.label;
   const detail = choice.description ? muted(out, detailText) : "";
   const padding = active && width > visibleText.length ? " ".repeat(width - visibleText.length) : "";
-  const marker = active ? ` ${color(out, "green", "<")}` : "";
+  const marker = active ? ` ${color(out, "green", ">")}` : "";
   return `  ${label}${detail}${padding}${marker}`;
 }
 

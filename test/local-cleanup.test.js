@@ -4,49 +4,31 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { cleanupLocalSetupFiles } from "../src/local-cleanup.js";
+import { cleanupLocalSetupFiles, createLocalSetupWorkspace } from "../src/local-cleanup.js";
 
-test("cleanup removes manifest and safe Supabase link cache", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "supacron-cleanup-"));
-  const manifestFile = path.join(root, "manifest.json");
-  const tempDir = path.join(root, "supabase", ".temp");
-  await fs.mkdir(tempDir, { recursive: true });
-  await fs.writeFile(manifestFile, "{}\n");
-  await fs.writeFile(path.join(tempDir, "cli-latest"), "2.117.0\n");
-  await fs.writeFile(path.join(tempDir, "linked-project.json"), "{}\n");
+test("createLocalSetupWorkspace creates an isolated temp directory", async () => {
+  const workspace = await createLocalSetupWorkspace();
 
   try {
-    const result = await cleanupLocalSetupFiles({
-      manifestFile,
-      removeManifest: true,
-      cwd: root,
-    });
-
-    assert.equal(result.skipped.length, 0);
-    assert.equal(await exists(manifestFile), false);
-    assert.equal(await exists(tempDir), false);
-    assert.equal(await exists(path.join(root, "supabase")), false);
+    assert.equal(path.dirname(workspace), os.tmpdir());
+    assert.match(path.basename(workspace), /^supacron-setup-/);
+    assert.equal((await fs.stat(workspace)).isDirectory(), true);
   } finally {
-    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
   }
 });
 
-test("cleanup keeps Supabase temp cache when unexpected files exist", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "supacron-cleanup-"));
-  const tempDir = path.join(root, "supabase", ".temp");
-  await fs.mkdir(tempDir, { recursive: true });
-  await fs.writeFile(path.join(tempDir, "linked-project.json"), "{}\n");
-  await fs.writeFile(path.join(tempDir, "custom.txt"), "keep\n");
+test("cleanupLocalSetupFiles removes the complete setup workspace", async () => {
+  const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "supacron-cleanup-"));
+  const nested = path.join(workspace, "supabase", ".temp");
+  await fs.mkdir(nested, { recursive: true });
+  await fs.writeFile(path.join(nested, "linked-project.json"), "{}\n");
 
-  try {
-    const result = await cleanupLocalSetupFiles({ cwd: root });
+  const result = await cleanupLocalSetupFiles({ workspaceDir: workspace });
 
-    assert.deepEqual(result.removed, []);
-    assert.equal(result.skipped.length, 1);
-    assert.equal(await exists(path.join(tempDir, "custom.txt")), true);
-  } finally {
-    await fs.rm(root, { recursive: true, force: true });
-  }
+  assert.deepEqual(result.skipped, []);
+  assert.deepEqual(result.removed, [workspace]);
+  assert.equal(await exists(workspace), false);
 });
 
 async function exists(filePath) {

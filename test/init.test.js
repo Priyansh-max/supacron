@@ -36,7 +36,6 @@ test("init rejects removed observe mode", async () => {
 test("init manual mode fallback prints SQL, verifies, deploys Cloudflare, and writes no secret output", async () => {
   const calls = [];
   const output = createOutput();
-  const manifestWrites = [];
   const randomBytes = (length) => Buffer.alloc(length, "a");
 
   const result = await init(["--mode", "manual", "--approve-cloudflare", "--confirm-manual-sql"], {
@@ -66,10 +65,6 @@ test("init manual mode fallback prints SQL, verifies, deploys Cloudflare, and wr
       lastPingAt: "2026-09-14T15:01:00.000Z",
       pingCount: 1,
     }),
-    writeInstallManifest: async (manifest) => {
-      manifestWrites.push(manifest);
-      return "C:\\Users\\buddy\\AppData\\Local\\supacron\\installations\\abcdefghijklmnopqrst.json";
-    },
   });
 
   assert.equal(result.ok, true);
@@ -97,8 +92,6 @@ test("init manual mode fallback prints SQL, verifies, deploys Cloudflare, and wr
     calls.filter((call) => call[0] === "secret-delete"),
     [["secret-delete", "SUPACRON_VERIFY_SECRET"]],
   );
-  assert.equal(manifestWrites[0].security.localSecretStorage, false);
-  assert.equal(manifestWrites[0].database.setupMode, "manual");
   assert.match(output.text(), /Manual Supabase SQL/);
   assert.match(output.text(), /Setup complete/);
   assert.doesNotMatch(output.text(), /sb_publishable_abcdefghijklmnopqrstuvwxyz/);
@@ -137,7 +130,6 @@ test("init defaults to automatic guided setup and runs shown SQL only after expl
       lastPingAt: "2026-09-14T15:02:00.000Z",
       pingCount: 1,
     }),
-    writeInstallManifest: async () => "manifest.json",
   });
 
   assert.deepEqual(calls[0], ["link-project", PROJECT.ref]);
@@ -204,7 +196,6 @@ test("init custom schedule retries invalid cron before showing Cloudflare plan",
       lastPingAt: "2026-09-14T15:02:00.000Z",
       pingCount: 1,
     }),
-    writeInstallManifest: async () => "manifest.json",
   });
 
   assert.equal(result.schedule, "*/15 * * * *");
@@ -212,7 +203,7 @@ test("init custom schedule retries invalid cron before showing Cloudflare plan",
   assert.match(output.text(), /Invalid cron expression/);
   assert.match(output.text(), /Schedule\s+\*\/15 \* \* \* \*/);
 });
-test("init can remove local setup files and logout official CLIs after setup", async () => {
+test("init removes its temporary setup workspace and can logout official CLIs", async () => {
   const calls = [];
   const output = createOutput();
 
@@ -223,16 +214,15 @@ test("init can remove local setup files and logout official CLIs after setup", a
     "--approve-cloudflare",
     "--schedule",
     "0 0,12 * * *",
-    "--cleanup",
-    "all",
-    "--logout",
-    "all",
+    "--session",
+    "logout",
   ], {
     nodeVersion: "22.16.0",
     now: "2026-09-14T15:00:00.000Z",
     out: output,
     rl: createRl(["1", "1"]),
     randomBytes: (length) => Buffer.alloc(length, "f"),
+    createLocalSetupWorkspace: async () => "C:\\Temp\\supacron-setup-test",
     listSupabaseProjects: () => [PROJECT],
     linkSupabaseProject: () => {},
     executeSql: () => ({ stdout: "[]" }),
@@ -251,27 +241,26 @@ test("init can remove local setup files and logout official CLIs after setup", a
       lastPingAt: "2026-09-14T15:02:00.000Z",
       pingCount: 1,
     }),
-    writeInstallManifest: async () => "manifest.json",
     cleanupLocalSetupFiles: async (request) => {
-      calls.push(["cleanup", request.manifestFile, request.removeManifest]);
-      return { removed: ["manifest.json", "supabase/.temp"], skipped: [] };
+      calls.push(["cleanup", request.workspaceDir]);
+      return { removed: [request.workspaceDir], skipped: [] };
     },
     logoutSupabase: async () => calls.push(["logout", "supabase"]),
     logoutCloudflare: async () => calls.push(["logout", "cloudflare"]),
   });
 
-  assert.equal(result.postSetup.cleanupMode, "all");
-  assert.equal(result.postSetup.logoutMode, "all");
+  assert.equal(result.postSetup.sessionMode, "logout");
   assert.deepEqual(calls, [
-    ["cleanup", "manifest.json", true],
+    ["cleanup", "C:\\Temp\\supacron-setup-test"],
     ["logout", "supabase"],
     ["logout", "cloudflare"],
   ]);
-  assert.match(output.text(), /Finish and privacy/);
-  assert.match(output.text(), /Local manifest removed/);
+  assert.match(output.text(), /Finish/);
+  assert.match(output.text(), /Removed temporary setup workspace/);
   assert.match(output.text(), /Supabase CLI logged out/);
   assert.match(output.text(), /Cloudflare Wrangler logged out/);
 });
+
 test("discoverSupabaseProjects uses official login recovery", async () => {
   const calls = [];
   const output = createOutput();

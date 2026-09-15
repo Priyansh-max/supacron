@@ -50,7 +50,7 @@ test("terminal UI places the active selection marker on the right", () => {
 
   assert.equal(
     choiceLine(out, choice, true, 48),
-    "  Twice daily (recommended) - 0 0,12 * * *         <",
+    "  Twice daily (recommended) - 0 0,12 * * *         >",
   );
   assert.equal(
     choiceLine(out, choice, false, 48),

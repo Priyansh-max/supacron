@@ -47,8 +47,8 @@ npx supacron setup
 - Worker Cron deployment.
 - One temporary verification endpoint.
 - Final scheduled-only Worker deployment.
-- A local non-secret installation manifest.
-- Optional local cleanup and official CLI logout choices.
+- Automatic cleanup of Supacron temporary setup files.
+- A final CLI session choice: remember me or logout.
 
 ## Runtime Path
 
@@ -102,40 +102,32 @@ In Cloudflare:
 
 Locally:
 
-- A platform config manifest with project reference, Worker name, schedule, timestamps, checksums, and dashboard links.
-- Supabase CLI link cache in `supabase/.temp` when the official CLI creates it.
-- No local secrets.
+- A temporary Supacron setup workspace under the OS temp directory while setup is running.
+- No project-folder Supabase link cache.
+- No stored local secrets.
+- No persistent Supacron setup files after a successful install.
 
-At the end of setup, Supacron asks whether to keep helper files, remove temporary CLI link files, or remove all local Supacron setup files. Removing the manifest does not stop the deployed cron, but future `status`, `repair`, and `uninstall` commands need the saved manifest.
+At the end of setup, Supacron asks only whether to keep official CLI sessions remembered or logout from both Supabase CLI and Cloudflare Wrangler. CLI sessions are owned by the official provider CLIs and live outside the project folder.
 
 ## Security Boundary
 
 Supacron never asks for database passwords, connection strings, service-role keys, Supabase access tokens, or Cloudflare API tokens.
 
-It generates the heartbeat secret in memory, stores only a SHA-256 digest in Supabase SQL, and streams the clear value to Wrangler over stdin so Cloudflare stores it as a Worker secret. The clear heartbeat secret is never written to command arguments, generated files, the local manifest, or logs.
+It generates the heartbeat secret in memory, stores only a SHA-256 digest in Supabase SQL, and streams the clear value to Wrangler over stdin so Cloudflare stores it as a Worker secret. The clear heartbeat secret is never written to command arguments, generated files, local storage, or logs.
 
 The final Worker has no public HTTP handler. During installation, Supacron briefly deploys a secret-protected verification endpoint, calls it once, deletes its temporary secret, then deploys the final scheduled-only Worker.
 
-The local manifest is validated as non-secret data. Fields or values that look like tokens, passwords, service-role keys, connection strings, or publishable keys are rejected.
+Supacron runs provider setup commands from an isolated temporary workspace and removes that workspace after a successful install.
 
 ## Commands
 
 ```bash
 npx supacron setup
-npx supacron setup --cleanup temp --logout none
-npx supacron setup --cleanup all --logout all
-npx supacron status --project-ref <ref>
-npx supacron repair --project-ref <ref>
-npx supacron uninstall --project-ref <ref>
+npx supacron setup --session remember
+npx supacron setup --session logout
 ```
 
-`setup --cleanup keep|temp|all --logout none|supabase|cloudflare|all` can script the final privacy step. CLI logins are owned by the official Supabase CLI and Wrangler, so deleting project files does not log those CLIs out.
-
-`status` verifies the saved installation without local secrets.
-
-`repair` redeploys the final scheduled Worker config from the manifest. It does not recreate database objects because Supacron does not keep the heartbeat secret locally.
-
-`uninstall` shows the exact Worker and Supabase objects first, deletes only the selected Worker, runs scoped SQL for Supacron-owned database objects, and removes the local manifest after approval.
+`setup --session remember|logout` can script the final CLI session choice. `remember` keeps the official Supabase CLI and Wrangler sessions available for future CLI use. `logout` runs both official logout commands after the cron is installed and verified.
 
 ## Package Contents
 
