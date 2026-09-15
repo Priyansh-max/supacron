@@ -5,6 +5,7 @@ import {
   cloudflareWorkerUrl,
   listAccounts,
   login,
+  logout,
   parseAccountsJson
 } from "../src/cloudflare/client.js";
 import { CommandError } from "../src/lib/command.js";
@@ -71,6 +72,18 @@ test("login requests only Worker deployment identity scopes", () => {
   assert.equal(calls[0].options.interactive, true);
 });
 
+test("logout delegates to the official Wrangler CLI", () => {
+  const calls = [];
+  logout({
+    run(packageSpec, binary, args, options) {
+      calls.push({ packageSpec, binary, args, options });
+      return { stdout: "" };
+    }
+  });
+
+  assert.deepEqual(calls[0].args, ["logout"]);
+  assert.equal(calls[0].options.interactive, true);
+});
 test("Cloudflare Worker links validate account and Worker identity", () => {
   assert.equal(
     cloudflareWorkerUrl(ACCOUNT_A, "supacron-abcdefghijklmnopqrst"),

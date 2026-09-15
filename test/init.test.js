@@ -43,7 +43,7 @@ test("init manual mode fallback prints SQL, verifies, deploys Cloudflare, and wr
     nodeVersion: "22.16.0",
     now: "2026-09-14T15:00:00.000Z",
     out: output,
-    rl: createRl(["1", "1", ""]),
+    rl: createRl(["1", "1", "", "", ""]),
     randomBytes,
     listSupabaseProjects: () => [PROJECT],
     linkSupabaseProject: ({ projectRef }) => calls.push(["link-project", projectRef]),
@@ -113,7 +113,7 @@ test("init defaults to automatic guided setup and runs shown SQL only after expl
     nodeVersion: "22.16.0",
     now: "2026-09-14T15:00:00.000Z",
     out: output,
-    rl: createRl(["1", "", "1", "*/15 * * * *"]),
+    rl: createRl(["1", "", "1", "*/15 * * * *", "", ""]),
     randomBytes: (length) => Buffer.alloc(length, "b"),
     listSupabaseProjects: () => [PROJECT],
     linkSupabaseProject: ({ projectRef }) => calls.push(["link-project", projectRef]),
@@ -183,7 +183,7 @@ test("init custom schedule retries invalid cron before showing Cloudflare plan",
     nodeVersion: "22.16.0",
     now: "2026-09-14T15:00:00.000Z",
     out: output,
-    rl: createRl(["1", "1", "4", "Y", "*/15 * * * *"]),
+    rl: createRl(["1", "1", "4", "Y", "*/15 * * * *", "", ""]),
     randomBytes: (length) => Buffer.alloc(length, "e"),
     listSupabaseProjects: () => [PROJECT],
     linkSupabaseProject: () => {},
@@ -211,6 +211,66 @@ test("init custom schedule retries invalid cron before showing Cloudflare plan",
   assert.deepEqual([...new Set(deploys)], ["*/15 * * * *"]);
   assert.match(output.text(), /Invalid cron expression/);
   assert.match(output.text(), /Schedule\s+\*\/15 \* \* \* \*/);
+});
+test("init can remove local setup files and logout official CLIs after setup", async () => {
+  const calls = [];
+  const output = createOutput();
+
+  const result = await init([
+    "--mode",
+    "automatic",
+    "--approve-sql",
+    "--approve-cloudflare",
+    "--schedule",
+    "0 0,12 * * *",
+    "--cleanup",
+    "all",
+    "--logout",
+    "all",
+  ], {
+    nodeVersion: "22.16.0",
+    now: "2026-09-14T15:00:00.000Z",
+    out: output,
+    rl: createRl(["1", "1"]),
+    randomBytes: (length) => Buffer.alloc(length, "f"),
+    listSupabaseProjects: () => [PROJECT],
+    linkSupabaseProject: () => {},
+    executeSql: () => ({ stdout: "[]" }),
+    verifyDbStructure: () => ({ ok: true, heartbeatTable: true, pingFunction: true, heartbeatPolicy: true }),
+    listPublishableKeys: () => ["sb_publishable_abcdefghijklmnopqrstuvwxyz"],
+    listCloudflareAccounts: () => [ACCOUNT],
+    deployWorker: (request) => request.verification
+      ? { workersDevUrl: "https://supacron-abcdefghijklmnopqrst.example.workers.dev" }
+      : {},
+    putWorkerSecret: () => {},
+    deleteWorkerSecret: () => {},
+    verifyWorker: async () => ({ ok: true, lastPingAt: "2026-09-14T15:02:00.000Z", pingCount: 1 }),
+    verifyDbHeartbeat: () => ({
+      ok: true,
+      source: "cloudflare-cron",
+      lastPingAt: "2026-09-14T15:02:00.000Z",
+      pingCount: 1,
+    }),
+    writeInstallManifest: async () => "manifest.json",
+    cleanupLocalSetupFiles: async (request) => {
+      calls.push(["cleanup", request.manifestFile, request.removeManifest]);
+      return { removed: ["manifest.json", "supabase/.temp"], skipped: [] };
+    },
+    logoutSupabase: async () => calls.push(["logout", "supabase"]),
+    logoutCloudflare: async () => calls.push(["logout", "cloudflare"]),
+  });
+
+  assert.equal(result.postSetup.cleanupMode, "all");
+  assert.equal(result.postSetup.logoutMode, "all");
+  assert.deepEqual(calls, [
+    ["cleanup", "manifest.json", true],
+    ["logout", "supabase"],
+    ["logout", "cloudflare"],
+  ]);
+  assert.match(output.text(), /Finish and privacy/);
+  assert.match(output.text(), /Local manifest removed/);
+  assert.match(output.text(), /Supabase CLI logged out/);
+  assert.match(output.text(), /Cloudflare Wrangler logged out/);
 });
 test("discoverSupabaseProjects uses official login recovery", async () => {
   const calls = [];
@@ -241,7 +301,7 @@ test("deployCloudflareCron cleans temporary verification secret on verification 
       init(["--mode", "automatic", "--approve-sql", "--approve-cloudflare"], {
         nodeVersion: "22.16.0",
         out: createOutput(),
-        rl: createRl(["1", "1", ""]),
+        rl: createRl(["1", "1", "", "", ""]),
         randomBytes: (length) => Buffer.alloc(length, "c"),
         listSupabaseProjects: () => [PROJECT],
         linkSupabaseProject: ({ projectRef }) => calls.push(["link-project", projectRef]),

@@ -4,6 +4,7 @@ import {
   SupabaseAuthRequiredError,
   listProjects,
   login,
+  logout,
   parseProjectsJson,
   projectDashboardUrl,
   projectSqlEditorUrl
@@ -97,6 +98,18 @@ test("login delegates to the official browser flow without a token argument", ()
   assert.equal(calls[0].options.interactive, true);
 });
 
+test("logout delegates to the official Supabase CLI", () => {
+  const calls = [];
+  logout({
+    run(packageSpec, binary, args, options) {
+      calls.push({ packageSpec, binary, args, options });
+      return { stdout: "" };
+    }
+  });
+
+  assert.deepEqual(calls[0].args, ["logout"]);
+  assert.equal(calls[0].options.interactive, true);
+});
 test("dashboard links validate project references", () => {
   assert.equal(
     projectDashboardUrl("abcdefghijklmnopqrst"),

@@ -73,6 +73,19 @@ export function login({ run = runNpx } = {}) {
   );
 }
 
+export function logout({ run = runNpx } = {}) {
+  return run(
+    WRANGLER_PACKAGE,
+    "wrangler",
+    ["logout"],
+    {
+      displayName: "Cloudflare logout",
+      interactive: true,
+      timeoutMs: AUTH_TIMEOUT_MS
+    }
+  );
+}
+
 export function cloudflareWorkerUrl(accountId, workerName) {
   if (!ACCOUNT_ID.test(accountId ?? "")) {
     throw new Error("Invalid Cloudflare account ID.");

@@ -67,6 +67,19 @@ export function login({ run = runNpx } = {}) {
   );
 }
 
+export function logout({ run = runNpx } = {}) {
+  return run(
+    SUPABASE_PACKAGE,
+    "supabase",
+    ["logout"],
+    {
+      displayName: "Supabase logout",
+      interactive: true,
+      timeoutMs: AUTH_TIMEOUT_MS
+    }
+  );
+}
+
 export function projectDashboardUrl(projectRef) {
   if (!PROJECT_REF.test(projectRef)) {
     throw new Error("Invalid Supabase project reference.");

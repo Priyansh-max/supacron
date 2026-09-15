@@ -48,6 +48,7 @@ npx supacron setup
 - One temporary verification endpoint.
 - Final scheduled-only Worker deployment.
 - A local non-secret installation manifest.
+- Optional local cleanup and official CLI logout choices.
 
 ## Runtime Path
 
@@ -102,7 +103,10 @@ In Cloudflare:
 Locally:
 
 - A platform config manifest with project reference, Worker name, schedule, timestamps, checksums, and dashboard links.
+- Supabase CLI link cache in `supabase/.temp` when the official CLI creates it.
 - No local secrets.
+
+At the end of setup, Supacron asks whether to keep helper files, remove temporary CLI link files, or remove all local Supacron setup files. Removing the manifest does not stop the deployed cron, but future `status`, `repair`, and `uninstall` commands need the saved manifest.
 
 ## Security Boundary
 
@@ -118,10 +122,14 @@ The local manifest is validated as non-secret data. Fields or values that look l
 
 ```bash
 npx supacron setup
+npx supacron setup --cleanup temp --logout none
+npx supacron setup --cleanup all --logout all
 npx supacron status --project-ref <ref>
 npx supacron repair --project-ref <ref>
 npx supacron uninstall --project-ref <ref>
 ```
+
+`setup --cleanup keep|temp|all --logout none|supabase|cloudflare|all` can script the final privacy step. CLI logins are owned by the official Supabase CLI and Wrangler, so deleting project files does not log those CLIs out.
 
 `status` verifies the saved installation without local secrets.
 

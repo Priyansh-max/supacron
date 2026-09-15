@@ -65,11 +65,27 @@ export function command(out, value) {
   return color(out, "cyan", value);
 }
 
+export function choiceLine(out, choice, active, width = 0) {
+  const detailText = choice.description ? ` - ${choice.description}` : "";
+  const visibleText = `${choice.label}${detailText}`;
+  const label = active ? color(out, "green", strong(out, choice.label)) : choice.label;
+  const detail = choice.description ? muted(out, detailText) : "";
+  const padding = active && width > visibleText.length ? " ".repeat(width - visibleText.length) : "";
+  const marker = active ? ` ${color(out, "green", "<")}` : "";
+  return `  ${label}${detail}${padding}${marker}`;
+}
+
 export function renderBanner(out, banner) {
+  const lines = banner.split("\n");
+  const width = Math.max(...lines.map((line) => line.length), 58);
+  const rule = `+${"-".repeat(width + 2)}+`;
+
   write(out, "");
-  for (const line of banner.split("\n")) {
-    write(out, color(out, "cyan", line));
+  write(out, color(out, "blue", rule));
+  for (const line of lines) {
+    write(out, color(out, "cyan", `| ${line.padEnd(width)} |`));
   }
-  write(out, color(out, "blue", strong(out, "Supacron secure setup")));
-  write(out, muted(out, "Cloudflare Workers Cron -> Supabase heartbeat, using only official CLIs."));
+  write(out, color(out, "blue", rule));
+  write(out, `  ${color(out, "green", strong(out, "secure setup"))} ${muted(out, "for Cloudflare Workers Cron -> Supabase heartbeat")}`);
+  write(out, `  ${muted(out, "Official CLIs only. No service-role keys, DB passwords, or connection strings.")}`);
 }
