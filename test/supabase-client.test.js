@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   SupabaseAuthRequiredError,
+  SupabaseTemporarilyUnavailableError,
   listProjects,
   login,
   logout,
@@ -84,6 +85,26 @@ test("listProjects maps authentication failures without leaking details", () => 
   );
 });
 
+test("listProjects maps scheduled maintenance without raw provider JSON", () => {
+  assert.throws(
+    () => listProjects({
+      run() {
+        throw new CommandError("failed", {
+          stderr:
+            "Unexpected error retrieving projects: {\"error\":\"Service temporarily unavailable for scheduled maintenance\",\"estimated_completion\":\"Tue, 15 Sep 2026 21:45:00 GMT\"}\nTry rerunning the command with --debug to troubleshoot the error.",
+        });
+      }
+    }),
+    (error) => {
+      assert.equal(error instanceof SupabaseTemporarilyUnavailableError, true);
+      assert.match(error.message, /Service temporarily unavailable for scheduled maintenance/);
+      assert.match(error.message, /Retry after Tue, 15 Sep 2026 21:45:00 GMT/);
+      assert.match(error.message, /Running Supabase projects are not affected/);
+      assert.doesNotMatch(error.message, /estimated_completion/);
+      return true;
+    }
+  );
+});
 test("login delegates to the official browser flow without a token argument", () => {
   const calls = [];
   login({

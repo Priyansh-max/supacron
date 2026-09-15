@@ -10,6 +10,13 @@ export class SupabaseAuthRequiredError extends Error {
   }
 }
 
+export class SupabaseTemporarilyUnavailableError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "SupabaseTemporarilyUnavailableError";
+  }
+}
+
 export function parseProjectsJson(raw) {
   let parsed;
   try {
@@ -50,6 +57,14 @@ export function listProjects({ run = runNpx } = {}) {
     if (error instanceof CommandError && isAuthenticationFailure(error.stderr)) {
       throw new SupabaseAuthRequiredError();
     }
+
+    if (error instanceof CommandError) {
+      const unavailable = parseTemporaryUnavailable(error.stderr || error.stdout);
+      if (unavailable) {
+        throw new SupabaseTemporarilyUnavailableError(unavailable);
+      }
+    }
+
     throw error;
   }
 }
@@ -102,4 +117,32 @@ function cleanLabel(value, fallback) {
 
 function isAuthenticationFailure(stderr) {
   return /access token|not logged in|login required|unauthorized|401/i.test(stderr);
+}
+
+function parseTemporaryUnavailable(raw) {
+  const text = String(raw || "");
+  if (!/temporarily unavailable|scheduled maintenance|service unavailable/i.test(text)) {
+    return null;
+  }
+
+  const providerError = parseEmbeddedJson(text);
+  const retryAt = providerError?.estimated_completion
+    ? ` Retry after ${providerError.estimated_completion}.`
+    : " Please retry in a few minutes.";
+  const reason = providerError?.error_description || providerError?.error || "Supabase Management API is temporarily unavailable.";
+  return `${reason}${retryAt} Running Supabase projects are not affected.`;
+}
+
+function parseEmbeddedJson(text) {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end <= start) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text.slice(start, end + 1));
+  } catch {
+    return null;
+  }
 }
