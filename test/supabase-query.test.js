@@ -22,8 +22,8 @@ test("executeProjectSql passes SQL through a restricted temporary file", () => {
 
   assert.equal(result.stdout, "[]");
   assert.equal(captured.binary, "supabase");
-  assert.deepEqual(captured.args.slice(0, 4), [
-    "db", "query", "--project-ref", "abcdefghijklmnopqrst"
+  assert.deepEqual(captured.args.slice(0, 5), [
+    "db", "query", "--linked", "--project-ref", "abcdefghijklmnopqrst"
   ]);
   assert.equal(captured.args.includes(sql), false);
   assert.equal(captured.args.includes("--output"), true);

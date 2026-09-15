@@ -32,6 +32,7 @@ export function executeProjectSql({
       [
         "db",
         "query",
+        "--linked",
         "--project-ref",
         projectRef,
         "--file",
