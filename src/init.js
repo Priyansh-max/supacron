@@ -54,6 +54,29 @@ const SETUP_MODES = [
   },
 ];
 
+const SCHEDULE_PRESETS = [
+  {
+    value: DEFAULT_SCHEDULE,
+    label: "Twice daily (recommended)",
+    description: DEFAULT_SCHEDULE,
+  },
+  {
+    value: "0 * * * *",
+    label: "Hourly",
+    description: "0 * * * *",
+  },
+  {
+    value: "*/15 * * * *",
+    label: "Every 15 minutes",
+    description: "*/15 * * * *",
+  },
+  {
+    value: "custom",
+    label: "Custom cron expression",
+    description: "Enter your own 5-field cron schedule.",
+  },
+];
+
 const SECRET_BINDINGS = [
   "SUPABASE_URL",
   "SUPABASE_PUBLISHABLE_KEY",
@@ -470,13 +493,49 @@ async function chooseSetupMode({ parsed, rl, out }) {
 
 async function chooseSchedule({ parsed, rl, out }) {
   if (parsed.values.schedule) {
-    return parsed.values.schedule;
+    return requireValidSchedule(parsed.values.schedule);
   }
 
-  section(out, "Schedule");
-  write(out, `  ${muted(out, "Recommended ")}${DEFAULT_SCHEDULE}`);
-  const answer = await askRaw(rl, "> ");
-  return answer.trim() || DEFAULT_SCHEDULE;
+  const selected = await chooseFromList({
+    rl,
+    out,
+    question: "Choose cron schedule",
+    choices: SCHEDULE_PRESETS.map((entry) => ({
+      value: entry.value,
+      label: entry.label,
+      description: entry.description,
+      item: entry.value,
+    })),
+  });
+
+  if (selected !== "custom") {
+    return selected;
+  }
+
+  section(out, "Custom schedule");
+  write(out, muted(out, "  Use 5 cron fields, for example: */15 * * * *"));
+  while (true) {
+    const answer = (await askRaw(rl, "Cron expression: ")).trim();
+    try {
+      return requireValidSchedule(answer);
+    } catch {
+      status(out, "warn", "Invalid cron expression. Use exactly 5 fields, for example: 0 0,12 * * *");
+    }
+  }
+}
+
+function requireValidSchedule(value) {
+  if (typeof value !== "string" || !validCron(value.trim())) {
+    throw new Error("Invalid cron schedule. Choose a preset or provide a 5-field cron expression like 0 0,12 * * *.");
+  }
+  return value.trim();
+}
+
+function validCron(value) {
+  return typeof value === "string"
+    && value.length <= 100
+    && /^[0-9*/?, -]+$/.test(value)
+    && value.trim().split(/\s+/).length === 5;
 }
 
 function chooseWorkerName({ parsed, project }) {
@@ -506,7 +565,7 @@ async function chooseFromList({ rl, out, question, choices }) {
     : choices.find((entry) => entry.value === selected.trim());
 
   if (!choice) {
-    throw new Error(`Invalid selection: ${selected.trim()}`);
+    throw new Error(`${question}: invalid selection: ${selected.trim() || "empty"}`);
   }
 
   return choice.item ?? choice.value;
@@ -550,9 +609,11 @@ async function chooseFromInteractiveList({ question, choices }) {
       output.write("\x1b[?25l");
       output.write(`\x1b[2K${color(output, "blue", strong(output, question))}\n`);
       for (const [index, choice] of choices.entries()) {
-        const marker = index === selectedIndex ? ">" : " ";
-        const detail = choice.description ? ` - ${choice.description}` : "";
-        output.write(`\x1b[2K${marker} ${choice.label}${detail}\n`);
+        const active = index === selectedIndex;
+        const marker = active ? color(output, "green", ">") : " ";
+        const label = active ? color(output, "green", strong(output, choice.label)) : choice.label;
+        const detail = choice.description ? muted(output, ` - ${choice.description}`) : "";
+        output.write(`\x1b[2K${marker} ${label}${detail}\n`);
       }
       output.write(`\x1b[2K${muted(output, "Use arrow keys and Enter.")}\n`);
       rendered = true;

@@ -148,6 +148,70 @@ test("init defaults to automatic guided setup and runs shown SQL only after expl
   assert.match(output.text(), /Run the shown SQL using the official Supabase CLI now\? yes/);
 });
 
+
+test("init rejects invalid schedule flags before Cloudflare deployment", async () => {
+  let deployed = false;
+
+  await assert.rejects(
+    () => init(["--mode", "automatic", "--approve-sql", "--approve-cloudflare", "--schedule", "Y"], {
+      nodeVersion: "22.16.0",
+      out: createOutput(),
+      rl: createRl(["1", "1"]),
+      randomBytes: (length) => Buffer.alloc(length, "d"),
+      listSupabaseProjects: () => [PROJECT],
+      linkSupabaseProject: () => {},
+      executeSql: () => ({ stdout: "[]" }),
+      verifyDbStructure: () => ({ ok: true, heartbeatTable: true, pingFunction: true, heartbeatPolicy: true }),
+      listPublishableKeys: () => ["sb_publishable_abcdefghijklmnopqrstuvwxyz"],
+      listCloudflareAccounts: () => [ACCOUNT],
+      deployWorker: () => {
+        deployed = true;
+        return {};
+      },
+    }),
+    /Invalid cron schedule/,
+  );
+
+  assert.equal(deployed, false);
+});
+
+test("init custom schedule retries invalid cron before showing Cloudflare plan", async () => {
+  const deploys = [];
+  const output = createOutput();
+
+  const result = await init(["--mode", "automatic", "--approve-sql", "--approve-cloudflare"], {
+    nodeVersion: "22.16.0",
+    now: "2026-09-14T15:00:00.000Z",
+    out: output,
+    rl: createRl(["1", "1", "4", "Y", "*/15 * * * *"]),
+    randomBytes: (length) => Buffer.alloc(length, "e"),
+    listSupabaseProjects: () => [PROJECT],
+    linkSupabaseProject: () => {},
+    executeSql: () => ({ stdout: "[]" }),
+    verifyDbStructure: () => ({ ok: true, heartbeatTable: true, pingFunction: true, heartbeatPolicy: true }),
+    listPublishableKeys: () => ["sb_publishable_abcdefghijklmnopqrstuvwxyz"],
+    listCloudflareAccounts: () => [ACCOUNT],
+    deployWorker: (request) => {
+      deploys.push(request.schedule);
+      return request.verification ? { workersDevUrl: "https://supacron-abcdefghijklmnopqrst.example.workers.dev" } : {};
+    },
+    putWorkerSecret: () => {},
+    deleteWorkerSecret: () => {},
+    verifyWorker: async () => ({ ok: true, lastPingAt: "2026-09-14T15:02:00.000Z", pingCount: 1 }),
+    verifyDbHeartbeat: () => ({
+      ok: true,
+      source: "cloudflare-cron",
+      lastPingAt: "2026-09-14T15:02:00.000Z",
+      pingCount: 1,
+    }),
+    writeInstallManifest: async () => "manifest.json",
+  });
+
+  assert.equal(result.schedule, "*/15 * * * *");
+  assert.deepEqual([...new Set(deploys)], ["*/15 * * * *"]);
+  assert.match(output.text(), /Invalid cron expression/);
+  assert.match(output.text(), /Schedule\s+\*\/15 \* \* \* \*/);
+});
 test("discoverSupabaseProjects uses official login recovery", async () => {
   const calls = [];
   const output = createOutput();
