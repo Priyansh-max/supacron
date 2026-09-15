@@ -20,17 +20,17 @@ export function createInstallationSql({ secretHash }) {
 do $supacron_preflight$
 begin
   if pg_catalog.to_regnamespace('supacron') is not null
-     or pg_catalog.to_regprocedure('public.supacron_ping(text)') is not null then
-    raise exception 'Supacron objects already exist. Run supacron status or repair.';
+     and pg_catalog.to_regclass('supacron.heartbeat') is null then
+    raise exception 'Supacron schema already exists but supacron.heartbeat is missing. Resolve this schema collision before setup.';
   end if;
 end;
 $supacron_preflight$;
 
 create extension if not exists pgcrypto with schema extensions;
 
-create schema supacron;
+create schema if not exists supacron;
 
-create table supacron.heartbeat (
+create table if not exists supacron.heartbeat (
   id boolean primary key default true check (id),
   installed_at timestamptz not null default pg_catalog.now(),
   last_ping_at timestamptz,
@@ -38,14 +38,22 @@ create table supacron.heartbeat (
   last_source text
 );
 
-insert into supacron.heartbeat (id) values (true);
+insert into supacron.heartbeat (id) values (true)
+on conflict (id) do nothing;
 
 alter table supacron.heartbeat enable row level security;
 
 revoke all on schema supacron from public, anon, authenticated;
 revoke all on table supacron.heartbeat from public, anon, authenticated;
 
-create function public.supacron_ping(p_secret text)
+drop policy if exists supacron_no_direct_access on supacron.heartbeat;
+create policy supacron_no_direct_access
+on supacron.heartbeat
+for all
+using (false)
+with check (false);
+
+create or replace function public.supacron_ping(p_secret text)
 returns jsonb
 language plpgsql
 security definer

@@ -17,13 +17,15 @@ test("migration stores a digest instead of the heartbeat secret", () => {
   assert.match(sql, /extensions\.digest/);
 });
 
-test("migration fails closed on object collisions", () => {
+test("migration repairs Supacron-owned partial installs but rejects schema collisions", () => {
   const sql = createInstallationSql({ secretHash: "a".repeat(64) });
 
   assert.match(sql, /to_regnamespace\('supacron'\)/);
-  assert.match(sql, /to_regprocedure\('public\.supacron_ping\(text\)'\)/);
-  assert.match(sql, /raise exception 'Supacron objects already exist/);
-  assert.doesNotMatch(sql, /create schema if not exists supacron/);
+  assert.match(sql, /to_regclass\('supacron\.heartbeat'\)/);
+  assert.match(sql, /Supacron schema already exists but supacron\.heartbeat is missing/);
+  assert.match(sql, /create schema if not exists supacron/);
+  assert.match(sql, /create table if not exists supacron\.heartbeat/);
+  assert.match(sql, /create or replace function public\.supacron_ping/);
 });
 
 test("security definer function uses qualified names and narrow grants", () => {
@@ -34,6 +36,8 @@ test("security definer function uses qualified names and narrow grants", () => {
   assert.match(sql, /pg_catalog\.now\(\)/);
   assert.match(sql, /revoke all on function public\.supacron_ping\(text\) from public, anon, authenticated/);
   assert.match(sql, /grant execute on function public\.supacron_ping\(text\) to anon, authenticated/);
+  assert.match(sql, /create policy supacron_no_direct_access/);
+  assert.match(sql, /using \(false\)/);
   assert.doesNotMatch(sql, /p_source/);
 });
 

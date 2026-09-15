@@ -143,7 +143,7 @@ test("init defaults to automatic guided setup and runs shown SQL only after expl
   assert.deepEqual(calls[0], ["link-project", PROJECT.ref]);
   assert.equal(calls[1][0], "execute-sql");
   assert.equal(calls[1][1], "Supacron database setup");
-  assert.match(calls[1][2], /create schema supacron/i);
+  assert.match(calls[1][2], /create schema if not exists supacron/i);
   assert.doesNotMatch(calls[1][2], /bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/);
   assert.match(output.text(), /Run the shown SQL using the official Supabase CLI now\? yes/);
 });

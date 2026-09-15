@@ -53,8 +53,31 @@ test("parseStructureVerificationJson normalizes Supabase boolean formats", () =>
   );
 });
 
+test("parseStructureVerificationJson accepts current Supabase CLI rows wrapper", () => {
+  assert.deepEqual(
+    parseStructureVerificationJson(
+      JSON.stringify({
+        rows: [
+          {
+            heartbeat_table_exists: true,
+            ping_function_exists: true,
+            heartbeat_policy_exists: true,
+          },
+        ],
+        warning: "untrusted data warning",
+      }),
+    ),
+    {
+      heartbeatTable: true,
+      pingFunction: true,
+      heartbeatPolicy: true,
+      ok: true,
+    },
+  );
+});
+
 test("parseStructureVerificationJson fails closed on malformed data", () => {
-  assert.throws(() => parseStructureVerificationJson("{}"), /expected a JSON array/);
+  assert.throws(() => parseStructureVerificationJson("{}"), /expected a JSON array or rows array/);
   assert.throws(() => parseStructureVerificationJson("[]"), /exactly one row/);
   assert.throws(
     () =>
@@ -75,12 +98,13 @@ test("heartbeat verification SQL reads only the Cloudflare source row", () => {
   const sql = createHeartbeatVerificationSql();
 
   assert.match(sql, /from supacron\.heartbeat/);
-  assert.match(sql, /where source = 'cloudflare-cron'/);
+  assert.match(sql, /last_source as source/);
+  assert.match(sql, /where last_source = 'cloudflare-cron'/);
   assert.doesNotMatch(sql, /drop|alter|create|insert|update|delete/i);
 });
 
 test("parseHeartbeatVerificationJson reports row presence without exposing secrets", () => {
-  assert.deepEqual(parseHeartbeatVerificationJson("[]"), {
+  assert.deepEqual(parseHeartbeatVerificationJson(JSON.stringify({ rows: [] })), {
     ok: false,
     source: "cloudflare-cron",
     lastPingAt: null,

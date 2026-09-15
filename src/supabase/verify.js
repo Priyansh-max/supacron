@@ -25,11 +25,11 @@ select
 
 const HEARTBEAT_SQL = `
 select
-  source,
+  last_source as source,
   last_ping_at,
   ping_count
 from supacron.heartbeat
-where source = 'cloudflare-cron'
+where last_source = 'cloudflare-cron'
 limit 1;
 `;
 
@@ -118,11 +118,15 @@ function rowsFromJson(raw, label) {
     throw new Error(`${label} returned invalid JSON.`);
   }
 
-  if (!Array.isArray(parsed)) {
-    throw new Error(`${label} expected a JSON array.`);
+  if (Array.isArray(parsed)) {
+    return parsed;
   }
 
-  return parsed;
+  if (parsed && Array.isArray(parsed.rows)) {
+    return parsed.rows;
+  }
+
+  throw new Error(`${label} expected a JSON array or rows array.`);
 }
 
 function toBoolean(value) {
