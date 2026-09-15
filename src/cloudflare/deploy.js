@@ -9,6 +9,7 @@ const ACCOUNT_ID = /^[a-f0-9]{32}$/;
 const WORKER_NAME = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const HEX_SECRET = /^[a-f0-9]{64}$/;
 const PUBLISHABLE_KEY = /^sb_publishable_[A-Za-z0-9_-]{24,}$/;
+const JWT_KEY = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 const PLACEHOLDER_SECRET_VALUES = new Set([
   "undefined",
   "null",
@@ -268,13 +269,31 @@ function validateSecret(key, value) {
     return;
   }
 
-  if (key === "SUPABASE_PUBLISHABLE_KEY" && !PUBLISHABLE_KEY.test(value)) {
+  if (key === "SUPABASE_PUBLISHABLE_KEY" && !isSupabasePublicKey(value)) {
     throw new Error(`Invalid value for Cloudflare secret ${key}.`);
   }
 
   if ((key === "SUPACRON_HEARTBEAT_SECRET" || key === "SUPACRON_VERIFY_SECRET")
       && !HEX_SECRET.test(value)) {
     throw new Error(`Invalid value for Cloudflare secret ${key}.`);
+  }
+}
+
+function isSupabasePublicKey(value) {
+  if (PUBLISHABLE_KEY.test(value)) {
+    return true;
+  }
+
+  if (typeof value !== "string" || value.length > 4096 || !JWT_KEY.test(value)) {
+    return false;
+  }
+
+  const [, payload] = value.split(".");
+  try {
+    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    return parsed?.role === "anon";
+  } catch {
+    return false;
   }
 }
 

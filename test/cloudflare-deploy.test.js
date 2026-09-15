@@ -13,6 +13,8 @@ import {
 
 const ACCOUNT_ID = "a".repeat(32);
 const WORKER_NAME = "supacron-abcdefghijklmnopqrst";
+const ANON_KEY = createJwt({ iss: "supabase", role: "anon", ref: "abcdefghijklmnopqrst" });
+const SERVICE_ROLE_KEY = createJwt({ iss: "supabase", role: "service_role", ref: "abcdefghijklmnopqrst" });
 
 test("deployWorker uses an account-scoped temporary workspace and cleans it", () => {
   let directory;
@@ -116,11 +118,19 @@ test("putWorkerSecret accepts only binding-specific secret value shapes", () => 
     value: "b".repeat(64),
     run
   });
+  putWorkerSecret({
+    accountId: ACCOUNT_ID,
+    workerName: WORKER_NAME,
+    key: "SUPABASE_PUBLISHABLE_KEY",
+    value: ANON_KEY,
+    run
+  });
 
   assert.deepEqual(accepted, [
     ["SUPABASE_URL", "https://abcdefghijklmnopqrst.supabase.co\n"],
     ["SUPABASE_PUBLISHABLE_KEY", `sb_publishable_${"p".repeat(30)}\n`],
-    ["SUPACRON_VERIFY_SECRET", `${"b".repeat(64)}\n`]
+    ["SUPACRON_VERIFY_SECRET", `${"b".repeat(64)}\n`],
+    ["SUPABASE_PUBLISHABLE_KEY", `${ANON_KEY}\n`]
   ]);
 });
 
@@ -167,6 +177,15 @@ test("secret operations reject unknown names, placeholders, malformed values, an
       workerName: WORKER_NAME,
       key: "SUPABASE_PUBLISHABLE_KEY",
       value: "sb_secret_not-allowed-here"
+    }),
+    /Invalid value/
+  );
+  assert.throws(
+    () => putWorkerSecret({
+      accountId: ACCOUNT_ID,
+      workerName: WORKER_NAME,
+      key: "SUPABASE_PUBLISHABLE_KEY",
+      value: SERVICE_ROLE_KEY
     }),
     /Invalid value/
   );
@@ -263,3 +282,8 @@ test("verifyDeployedWorker does not expose response bodies in failures", async (
     }
   );
 });
+
+function createJwt(payload) {
+  const encode = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  return `${encode({ alg: "HS256", typ: "JWT" })}.${encode(payload)}.signature`;
+}

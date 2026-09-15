@@ -7,18 +7,21 @@ import {
 
 const KEY_A = `sb_publishable_${"a".repeat(30)}`;
 const KEY_B = `sb_publishable_${"b".repeat(30)}`;
+const ANON_KEY = createJwt({ iss: "supabase", role: "anon", ref: "abcdefghijklmnopqrst" });
+const SERVICE_ROLE_KEY = createJwt({ iss: "supabase", role: "service_role", ref: "abcdefghijklmnopqrst" });
 
-test("parsePublishableKeysJson allowlists only publishable keys", () => {
+test("parsePublishableKeysJson allowlists only public Supabase keys", () => {
   const result = parsePublishableKeysJson(JSON.stringify({
     keys: [
       { type: "publishable", api_key: KEY_B },
+      { name: "anon", api_key: ANON_KEY },
       { type: "secret", api_key: `sb_secret_${"s".repeat(30)}` },
-      { name: "service_role", api_key: "eyJheader.payload.signature" },
+      { name: "service_role", api_key: SERVICE_ROLE_KEY },
       { nested: { value: KEY_A } }
     ]
   }));
 
-  assert.deepEqual(result, [KEY_A, KEY_B]);
+  assert.deepEqual(result, [KEY_A, KEY_B, ANON_KEY]);
 });
 
 test("parsePublishableKeysJson rejects invalid and oversized responses", () => {
@@ -64,3 +67,8 @@ test("listPublishableKeys rejects an invalid project before execution", () => {
   );
   assert.equal(called, false);
 });
+
+function createJwt(payload) {
+  const encode = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  return `${encode({ alg: "HS256", typ: "JWT" })}.${encode(payload)}.signature`;
+}

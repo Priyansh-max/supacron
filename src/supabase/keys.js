@@ -3,6 +3,7 @@ import { runNpx } from "../lib/command.js";
 
 const PROJECT_REF = /^[a-z0-9]{20}$/;
 const PUBLISHABLE_KEY = /^sb_publishable_[A-Za-z0-9_-]{20,}$/;
+const JWT_KEY = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 const MAX_RESPONSE_BYTES = 1_000_000;
 
 export function parsePublishableKeysJson(raw) {
@@ -17,9 +18,15 @@ export function parsePublishableKeysJson(raw) {
     throw new Error("Supabase CLI returned invalid API-key JSON.");
   }
 
-  const matches = new Set();
-  collectPublishableKeys(parsed, matches);
-  return [...matches].sort();
+  const matches = {
+    publishable: new Set(),
+    anon: new Set()
+  };
+  collectPublicKeys(parsed, matches);
+  return [
+    ...[...matches.publishable].sort(),
+    ...[...matches.anon].sort()
+  ];
 }
 
 export function listPublishableKeys({ projectRef, run = runNpx }) {
@@ -38,26 +45,42 @@ export function listPublishableKeys({ projectRef, run = runNpx }) {
       "--output",
       "json"
     ],
-    { displayName: "Supabase publishable-key discovery" }
+    { displayName: "Supabase public API-key discovery" }
   );
 
   return parsePublishableKeysJson(result.stdout);
 }
 
-function collectPublishableKeys(value, matches) {
+function collectPublicKeys(value, matches) {
   if (typeof value === "string") {
     if (PUBLISHABLE_KEY.test(value)) {
-      matches.add(value);
+      matches.publishable.add(value);
+    } else if (isLegacyAnonKey(value)) {
+      matches.anon.add(value);
     }
     return;
   }
 
   if (Array.isArray(value)) {
-    value.forEach((item) => collectPublishableKeys(item, matches));
+    value.forEach((item) => collectPublicKeys(item, matches));
     return;
   }
 
   if (value && typeof value === "object") {
-    Object.values(value).forEach((item) => collectPublishableKeys(item, matches));
+    Object.values(value).forEach((item) => collectPublicKeys(item, matches));
+  }
+}
+
+function isLegacyAnonKey(value) {
+  if (typeof value !== "string" || value.length > 4096 || !JWT_KEY.test(value)) {
+    return false;
+  }
+
+  const [, payload] = value.split(".");
+  try {
+    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    return parsed?.role === "anon";
+  } catch {
+    return false;
   }
 }

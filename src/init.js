@@ -378,15 +378,15 @@ export async function deployCloudflareCron({
 
 async function discoverPublishableKey({ project, dependencies, out }) {
   write(out, "");
-  write(out, "Discovering Supabase publishable key without revealing secret keys...");
+  write(out, "Discovering Supabase public API key without revealing secret keys...");
   const keys = await (dependencies.listPublishableKeys || listPublishableKeys)({
     projectRef: project.ref,
   });
   if (keys.length === 0) {
-    throw new Error("No Supabase publishable key was returned. Supacron will not ask for secret/service-role keys.");
+    throw new Error("No Supabase public anon/publishable key was returned. Supacron will not ask for secret/service-role keys.");
   }
 
-  write(out, `Found ${keys.length} publishable key(s). The key value is not printed.`);
+  write(out, `Found ${keys.length} public API key(s). The key value is not printed.`);
   return keys[0];
 }
 

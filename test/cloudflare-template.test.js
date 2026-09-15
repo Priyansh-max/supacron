@@ -6,6 +6,7 @@ import {
 } from "../src/cloudflare/template.js";
 
 const PUBLISHABLE_KEY = `sb_publishable_${"p".repeat(30)}`;
+const ANON_KEY = createJwt({ iss: "supabase", role: "anon", ref: "abcdefghijklmnopqrst" });
 const HEARTBEAT_SECRET = "h".repeat(48);
 const VERIFY_SECRET = "v".repeat(48);
 
@@ -111,6 +112,42 @@ test("verification Worker performs one narrow heartbeat call", async () => {
   }
 });
 
+test("verification Worker accepts a legacy Supabase anon key", async () => {
+  const worker = await importWorker({ verification: true });
+  const originalFetch = globalThis.fetch;
+  let outbound;
+  globalThis.fetch = async (url, options) => {
+    outbound = { url: String(url), options };
+    return Response.json({
+      ok: true,
+      last_ping_at: "2026-09-14T12:00:00Z",
+      ping_count: 1,
+      source: "cloudflare-cron"
+    });
+  };
+
+  try {
+    const response = await worker.fetch(
+      new Request("https://worker.example/__supacron/verify", {
+        method: "POST",
+        headers: { authorization: `Bearer ${VERIFY_SECRET}` }
+      }),
+      {
+        SUPABASE_URL: "https://abcdefghijklmnopqrst.supabase.co",
+        SUPABASE_PUBLISHABLE_KEY: ANON_KEY,
+        SUPACRON_HEARTBEAT_SECRET: HEARTBEAT_SECRET,
+        SUPACRON_VERIFY_SECRET: VERIFY_SECRET
+      }
+    );
+
+    assert.equal(response.status, 200);
+    assert.equal(outbound.options.headers.apikey, ANON_KEY);
+    assert.equal(outbound.options.headers.Authorization, `Bearer ${ANON_KEY}`);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("verification failure never returns the provider response body", async () => {
   const worker = await importWorker({ verification: true });
   const originalFetch = globalThis.fetch;
@@ -182,3 +219,8 @@ test("Wrangler config rejects unsafe names and cron values", () => {
     /Invalid Cloudflare cron expression/
   );
 });
+
+function createJwt(payload) {
+  const encode = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  return `${encode({ alg: "HS256", typ: "JWT" })}.${encode(payload)}.signature`;
+}

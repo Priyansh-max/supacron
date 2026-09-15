@@ -46,6 +46,23 @@ function requiredString(env, name, validator) {
   return value;
 }
 
+function isSupabasePublicKey(value) {
+  if (value.startsWith("sb_publishable_") && value.length >= 35) {
+    return true;
+  }
+
+  if (!/^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$/.test(value) || value.length > 4096) {
+    return false;
+  }
+
+  try {
+    const payload = value.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = payload.padEnd(Math.ceil(payload.length / 4) * 4, "=");
+    return JSON.parse(atob(padded))?.role === "anon";
+  } catch {
+    return false;
+  }
+}
 function safeResult(value) {
   return {
     ok: value?.ok === true,
@@ -81,7 +98,7 @@ async function ping(env) {
   const publishableKey = requiredString(
     env,
     "SUPABASE_PUBLISHABLE_KEY",
-    (value) => value.startsWith("sb_publishable_") && value.length >= 35
+    isSupabasePublicKey
   );
   const heartbeatSecret = requiredString(
     env,
