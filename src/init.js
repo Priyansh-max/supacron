@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import readline from "node:readline";
 
 import { parseArgs } from "./args.js";
 import { DEFAULT_SCHEDULE } from "./constants.js";
@@ -12,7 +13,7 @@ import {
 } from "./supabase/client.js";
 import { listPublishableKeys } from "./supabase/keys.js";
 import { createInstallationSql, heartbeatSecretHash } from "./supabase/migration.js";
-import { executeProjectSql } from "./supabase/query.js";
+import { executeProjectSql, linkProject as linkSupabaseProject } from "./supabase/query.js";
 import { verifyHeartbeat, verifyStructure } from "./supabase/verify.js";
 import {
   CloudflareAuthRequiredError,
@@ -38,11 +39,6 @@ const SETUP_MODES = [
     value: "manual",
     label: "Manual SQL fallback",
     description: "Supacron prints SQL for you to run in Supabase, then verifies it.",
-  },
-  {
-    value: "observe",
-    label: "Observe only",
-    description: "Supacron lists projects and prints the plan without making changes.",
   },
 ];
 
@@ -84,17 +80,6 @@ export async function init(args = [], dependencies = {}) {
     writeDatabasePlan({ out, project, installSql });
 
     const setupMode = await chooseSetupMode({ parsed, rl, out });
-    if (setupMode === "observe") {
-      const report = {
-        ok: true,
-        mode: setupMode,
-        project,
-        changed: false,
-      };
-      writeObserveReport({ out, project });
-      return report;
-    }
-
     await setupDatabase({
       mode: setupMode,
       project,
@@ -103,6 +88,7 @@ export async function init(args = [], dependencies = {}) {
       rl,
       out,
       executeSql: dependencies.executeSql || executeProjectSql,
+      linkProject: dependencies.linkSupabaseProject || linkSupabaseProject,
       verifyDbStructure: dependencies.verifyDbStructure || verifyStructure,
     });
 
@@ -238,6 +224,7 @@ export async function setupDatabase({
   rl,
   out,
   executeSql,
+  linkProject,
   verifyDbStructure,
 }) {
   if (mode === "manual") {
@@ -255,6 +242,9 @@ export async function setupDatabase({
       question: "I have run the SQL successfully in Supabase.",
       defaultValue: false,
     });
+    write(out, "Linking Supabase project for CLI SQL access...");
+    linkProject({ projectRef: project.ref });
+    write(out, "Supabase project linked.");
   } else if (mode === "automatic") {
     await requireApproval({
       rl,
@@ -264,6 +254,9 @@ export async function setupDatabase({
       question: "Run the shown SQL using the official Supabase CLI now?",
       defaultValue: false,
     });
+    write(out, "Linking Supabase project for CLI SQL access...");
+    linkProject({ projectRef: project.ref });
+    write(out, "Supabase project linked.");
     executeSql({
       projectRef: project.ref,
       sql: installSql,
@@ -450,25 +443,17 @@ async function chooseSetupMode({ parsed, rl, out }) {
     return mode;
   }
 
-  write(out, "");
-  write(out, "Choose Supabase setup mode");
-  for (const [index, choice] of SETUP_MODES.entries()) {
-    write(out, `  ${index + 1}. ${choice.label}`);
-    write(out, `     ${choice.description}`);
-  }
-
-  const selected = await askRaw(rl, "> ");
-  if (!selected.trim()) {
-    return "automatic";
-  }
-
-  const number = Number.parseInt(selected, 10);
-  const choice = SETUP_MODES[number - 1] || SETUP_MODES.find((entry) => entry.value === selected.trim());
-  if (!choice) {
-    throw new Error(`Invalid setup mode: ${selected.trim()}`);
-  }
-
-  return choice.value;
+  return chooseFromList({
+    rl,
+    out,
+    question: "Choose Supabase setup mode",
+    choices: SETUP_MODES.map((entry) => ({
+      value: entry.value,
+      label: entry.label,
+      description: entry.description,
+      item: entry.value,
+    })),
+  });
 }
 
 async function chooseSchedule({ parsed, rl, out }) {
@@ -491,9 +476,16 @@ function chooseWorkerName({ parsed, project }) {
 }
 
 async function chooseFromList({ rl, out, question, choices }) {
+  if (supportsInteractiveList(out)) {
+    return chooseFromInteractiveList({ question, choices });
+  }
+
   write(out, "");
   write(out, question);
-  choices.forEach((choice, index) => write(out, `  ${index + 1}. ${choice.label}`));
+  choices.forEach((choice, index) => {
+    const detail = choice.description ? ` - ${choice.description}` : "";
+    write(out, `  ${index + 1}. ${choice.label}${detail}`);
+  });
 
   const selected = await askRaw(rl, "> ");
   const number = Number.parseInt(selected.trim() || "1", 10);
@@ -505,7 +497,85 @@ async function chooseFromList({ rl, out, question, choices }) {
     throw new Error(`Invalid selection: ${selected.trim()}`);
   }
 
-  return choice.item;
+  return choice.item ?? choice.value;
+}
+
+function supportsInteractiveList(out) {
+  return out === process.stdout
+    && process.stdin.isTTY
+    && process.stdout.isTTY
+    && process.env.CI !== "true";
+}
+
+async function chooseFromInteractiveList({ question, choices }) {
+  let selectedIndex = 0;
+  let rendered = false;
+  const input = process.stdin;
+  const output = process.stdout;
+
+  readline.emitKeypressEvents(input);
+  if (input.isTTY) {
+    input.setRawMode(true);
+  }
+  input.resume();
+
+  return new Promise((resolve, reject) => {
+    function cleanup() {
+      input.off("keypress", onKeypress);
+      if (input.isTTY) {
+        input.setRawMode(false);
+      }
+      output.write("\x1b[?25h");
+    }
+
+    function render() {
+      if (rendered) {
+        output.write(`\x1b[${choices.length + 2}F`);
+      } else {
+        output.write("\n");
+      }
+
+      output.write("\x1b[?25l");
+      output.write(`\x1b[2K${question}\n`);
+      for (const [index, choice] of choices.entries()) {
+        const marker = index === selectedIndex ? ">" : " ";
+        const detail = choice.description ? ` - ${choice.description}` : "";
+        output.write(`\x1b[2K${marker} ${choice.label}${detail}\n`);
+      }
+      output.write("\x1b[2KUse arrow keys and Enter.\n");
+      rendered = true;
+    }
+
+    function finish(choice) {
+      cleanup();
+      output.write("\n");
+      resolve(choice.item ?? choice.value);
+    }
+
+    function onKeypress(_char, key = {}) {
+      if (key.ctrl && key.name === "c") {
+        cleanup();
+        reject(new Error("Setup cancelled."));
+        return;
+      }
+      if (key.name === "up") {
+        selectedIndex = (selectedIndex - 1 + choices.length) % choices.length;
+        render();
+        return;
+      }
+      if (key.name === "down") {
+        selectedIndex = (selectedIndex + 1) % choices.length;
+        render();
+        return;
+      }
+      if (key.name === "return" || key.name === "enter" || key.name === "space") {
+        finish(choices[selectedIndex]);
+      }
+    }
+
+    input.on("keypress", onKeypress);
+    render();
+  });
 }
 
 async function requireApproval({ rl, out, parsed, flag, question, defaultValue }) {
@@ -546,13 +616,6 @@ function writeCloudflarePlan({ out, account, workerName, schedule }) {
   write(out, "Supacron will deploy through Wrangler, stream secrets through stdin, run one temporary verification endpoint,");
   write(out, "remove that verification secret, then deploy the final Worker without a public HTTP handler.");
   write(out, `Secret bindings used: ${SECRET_BINDINGS.join(", ")}`);
-}
-
-function writeObserveReport({ out, project }) {
-  write(out, "");
-  write(out, "Observe-only report");
-  write(out, `Selected Supabase project: ${project.name} (${project.ref})`);
-  write(out, "No Supabase SQL was run. No Cloudflare Worker was deployed. No secrets were generated or stored.");
 }
 
 function writeFinalReport({ out, report }) {

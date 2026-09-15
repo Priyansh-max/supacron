@@ -1,8 +1,23 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { executeProjectSql } from "../src/supabase/query.js";
+import { executeProjectSql, linkProject } from "../src/supabase/query.js";
 
+
+test("linkProject uses the official Supabase link command interactively", () => {
+  const calls = [];
+  linkProject({
+    projectRef: "abcdefghijklmnopqrst",
+    run(packageSpec, binary, args, options) {
+      calls.push({ packageSpec, binary, args, options });
+      return { stdout: "", stderr: "", exitCode: 0 };
+    }
+  });
+
+  assert.equal(calls[0].binary, "supabase");
+  assert.deepEqual(calls[0].args, ["link", "--project-ref", "abcdefghijklmnopqrst"]);
+  assert.equal(calls[0].options.interactive, true);
+});
 test("executeProjectSql passes SQL through a restricted temporary file", () => {
   const sql = "select 'sensitive query text';";
   let sqlPath;

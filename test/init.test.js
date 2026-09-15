@@ -1,9 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { init, ensureNodeVersion } from "../src/init.js";
+import { discoverSupabaseProjects, init, ensureNodeVersion } from "../src/init.js";
 import { SupabaseAuthRequiredError } from "../src/supabase/client.js";
-import { CloudflareAuthRequiredError } from "../src/cloudflare/client.js";
 
 const PROJECT = {
   ref: "abcdefghijklmnopqrst",
@@ -22,26 +21,16 @@ test("ensureNodeVersion requires current Wrangler-compatible Node", () => {
   assert.throws(() => ensureNodeVersion("18.19.0"), /Node\.js 20/);
 });
 
-test("init observe mode lists project and makes no changes", async () => {
-  const calls = [];
-  const output = createOutput();
-
-  const result = await init(["--mode", "observe"], {
-    nodeVersion: "22.16.0",
-    out: output,
-    rl: createRl(["1"]),
-    listSupabaseProjects: () => {
-      calls.push("list-projects");
-      return [PROJECT];
-    },
-  });
-
-  assert.equal(result.changed, false);
-  assert.deepEqual(calls, ["list-projects"]);
-  assert.match(output.text(), /____/);
-  assert.match(output.text(), /Supacron secure setup/);
-  assert.match(output.text(), /Observe-only report/);
-  assert.doesNotMatch(output.text(), /sb_publishable_/);
+test("init rejects removed observe mode", async () => {
+  await assert.rejects(
+    () => init(["--mode", "observe", "--project-ref", PROJECT.ref], {
+      nodeVersion: "22.16.0",
+      out: createOutput(),
+      rl: createRl([]),
+      listSupabaseProjects: () => [PROJECT],
+    }),
+    /Invalid setup mode: observe/,
+  );
 });
 
 test("init manual mode fallback prints SQL, verifies, deploys Cloudflare, and writes no secret output", async () => {
@@ -57,6 +46,7 @@ test("init manual mode fallback prints SQL, verifies, deploys Cloudflare, and wr
     rl: createRl(["1", "1", ""]),
     randomBytes,
     listSupabaseProjects: () => [PROJECT],
+    linkSupabaseProject: ({ projectRef }) => calls.push(["link-project", projectRef]),
     verifyDbStructure: ({ projectRef }) => {
       calls.push(["verify-structure", projectRef]);
       return { ok: true, heartbeatTable: true, pingFunction: true, heartbeatPolicy: true };
@@ -85,6 +75,7 @@ test("init manual mode fallback prints SQL, verifies, deploys Cloudflare, and wr
   assert.equal(result.ok, true);
   assert.equal(result.mode, "manual");
   assert.equal(result.schedule, "0 0,12 * * *");
+  assert.deepEqual(calls.filter((call) => call[0] === "link-project"), [["link-project", PROJECT.ref]]);
   assert.deepEqual(
     calls.filter((call) => call[0] === "deploy"),
     [
@@ -125,6 +116,7 @@ test("init defaults to automatic guided setup and runs shown SQL only after expl
     rl: createRl(["1", "", "1", "*/15 * * * *"]),
     randomBytes: (length) => Buffer.alloc(length, "b"),
     listSupabaseProjects: () => [PROJECT],
+    linkSupabaseProject: ({ projectRef }) => calls.push(["link-project", projectRef]),
     executeSql: (request) => {
       calls.push(["execute-sql", request.operation, request.sql]);
       return { stdout: "[]" };
@@ -148,23 +140,20 @@ test("init defaults to automatic guided setup and runs shown SQL only after expl
     writeInstallManifest: async () => "manifest.json",
   });
 
-  assert.equal(calls[0][0], "execute-sql");
-  assert.equal(calls[0][1], "Supacron database setup");
-  assert.match(calls[0][2], /create schema supacron/i);
-  assert.doesNotMatch(calls[0][2], /bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/);
+  assert.deepEqual(calls[0], ["link-project", PROJECT.ref]);
+  assert.equal(calls[1][0], "execute-sql");
+  assert.equal(calls[1][1], "Supacron database setup");
+  assert.match(calls[1][2], /create schema supacron/i);
+  assert.doesNotMatch(calls[1][2], /bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/);
   assert.match(output.text(), /Run the shown SQL using the official Supabase CLI now\? yes/);
 });
 
-test("init uses official login recovery paths for both providers", async () => {
+test("discoverSupabaseProjects uses official login recovery", async () => {
   const calls = [];
   const output = createOutput();
   let supabaseListCount = 0;
-  let cloudflareListCount = 0;
 
-  await init(["--mode", "observe"], {
-    nodeVersion: "22.16.0",
-    out: output,
-    rl: createRl(["1"]),
+  const projects = await discoverSupabaseProjects({
     listSupabaseProjects: () => {
       supabaseListCount += 1;
       if (supabaseListCount === 1) {
@@ -173,16 +162,9 @@ test("init uses official login recovery paths for both providers", async () => {
       return [PROJECT];
     },
     loginSupabase: () => calls.push("supabase-login"),
-    listCloudflareAccounts: () => {
-      cloudflareListCount += 1;
-      if (cloudflareListCount === 1) {
-        throw new CloudflareAuthRequiredError();
-      }
-      return [ACCOUNT];
-    },
-    loginCloudflare: () => calls.push("cloudflare-login"),
-  });
+  }, output);
 
+  assert.deepEqual(projects, [PROJECT]);
   assert.deepEqual(calls, ["supabase-login"]);
   assert.match(output.text(), /official Supabase CLI browser flow/);
 });
@@ -198,6 +180,7 @@ test("deployCloudflareCron cleans temporary verification secret on verification 
         rl: createRl(["1", "1", ""]),
         randomBytes: (length) => Buffer.alloc(length, "c"),
         listSupabaseProjects: () => [PROJECT],
+        linkSupabaseProject: ({ projectRef }) => calls.push(["link-project", projectRef]),
         executeSql: () => ({ stdout: "[]" }),
         verifyDbStructure: () => ({ ok: true, heartbeatTable: true, pingFunction: true, heartbeatPolicy: true }),
         listPublishableKeys: () => ["sb_publishable_abcdefghijklmnopqrstuvwxyz"],

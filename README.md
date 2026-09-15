@@ -41,7 +41,7 @@ npx supacron setup
 
 - Supabase browser login through the official CLI.
 - Project selection.
-- Automatic SQL setup by default, with manual and observe modes available.
+- Automatic SQL setup by default, with manual fallback available.
 - Database structure verification.
 - Cloudflare browser login through Wrangler.
 - Worker Cron deployment.
@@ -83,14 +83,6 @@ npx supacron setup --mode manual
 ```
 
 Fallback mode. Supacron prints the exact SQL for you to run in Supabase SQL Editor, then verifies the installed objects. Supacron never receives a database-write credential in this mode.
-
-### Observe Only
-
-```bash
-npx supacron setup --mode observe
-```
-
-Lists and inspects what Supacron can see, but does not change Supabase or Cloudflare.
 
 ## What It Creates
 

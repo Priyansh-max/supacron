@@ -1,10 +1,27 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { COMMAND_TIMEOUT_MS, SUPABASE_PACKAGE } from "../constants.js";
+import { AUTH_TIMEOUT_MS, COMMAND_TIMEOUT_MS, SUPABASE_PACKAGE } from "../constants.js";
 import { runNpx } from "../lib/command.js";
 
 const PROJECT_REF = /^[a-z0-9]{20}$/;
+
+export function linkProject({ projectRef, run = runNpx }) {
+  if (!PROJECT_REF.test(projectRef ?? "")) {
+    throw new Error("Invalid Supabase project reference.");
+  }
+
+  return run(
+    SUPABASE_PACKAGE,
+    "supabase",
+    ["link", "--project-ref", projectRef],
+    {
+      displayName: "Supabase project link",
+      interactive: true,
+      timeoutMs: AUTH_TIMEOUT_MS
+    }
+  );
+}
 
 export function executeProjectSql({
   projectRef,

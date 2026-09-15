@@ -36,7 +36,7 @@ function printHelp() {
 
 Usage:
   supacron setup
-  supacron setup --mode automatic|manual|observe
+  supacron setup --mode automatic|manual
   supacron setup --project-ref <ref> --account-id <id>
   supacron status --project-ref <ref>
   supacron uninstall --project-ref <ref>
