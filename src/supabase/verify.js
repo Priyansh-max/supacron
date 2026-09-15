@@ -68,17 +68,31 @@ export function parseHeartbeatVerificationJson(raw) {
 
   const row = rows[0];
   const pingCount = Number(row.ping_count);
+  const lastPingAt = normalizeTimestamp(row.last_ping_at);
 
   return {
     ok:
       row.source === "cloudflare-cron" &&
-      typeof row.last_ping_at === "string" &&
+      lastPingAt !== null &&
       Number.isSafeInteger(pingCount) &&
       pingCount > 0,
     source: row.source === "cloudflare-cron" ? row.source : null,
-    lastPingAt: typeof row.last_ping_at === "string" ? row.last_ping_at : null,
+    lastPingAt,
     pingCount: Number.isSafeInteger(pingCount) ? pingCount : 0,
   };
+}
+
+function normalizeTimestamp(value) {
+  if (typeof value !== "string" || value.trim() === "") {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed.toISOString();
 }
 
 export function verifyStructure({ projectRef, execute = executeProjectSql }) {

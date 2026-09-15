@@ -130,6 +130,45 @@ test("parseHeartbeatVerificationJson reports row presence without exposing secre
   );
 });
 
+test("parseHeartbeatVerificationJson normalizes Postgres timestamps to ISO", () => {
+  assert.deepEqual(
+    parseHeartbeatVerificationJson(
+      JSON.stringify([
+        {
+          source: "cloudflare-cron",
+          last_ping_at: "2026-09-15 12:34:56.789+00",
+          ping_count: "3",
+        },
+      ]),
+    ),
+    {
+      ok: true,
+      source: "cloudflare-cron",
+      lastPingAt: "2026-09-15T12:34:56.789Z",
+      pingCount: 3,
+    },
+  );
+});
+
+test("parseHeartbeatVerificationJson rejects invalid heartbeat timestamps", () => {
+  assert.deepEqual(
+    parseHeartbeatVerificationJson(
+      JSON.stringify([
+        {
+          source: "cloudflare-cron",
+          last_ping_at: "not a timestamp",
+          ping_count: "3",
+        },
+      ]),
+    ),
+    {
+      ok: false,
+      source: "cloudflare-cron",
+      lastPingAt: null,
+      pingCount: 3,
+    },
+  );
+});
 test("verify helpers execute the expected SQL against the selected project", () => {
   const calls = [];
   const execute = (request) => {
