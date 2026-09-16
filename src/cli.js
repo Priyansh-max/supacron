@@ -42,8 +42,8 @@ Usage:
   supacron setup --mode automatic|manual
   supacron setup --project-ref <ref> --account-id <id>
   supacron setup --session remember|logout
-  supacron test
-  supacron test --project-ref <ref>
+  npx supacron test
+  npx supacron test --project-ref <ref>
 
 Commands:
   setup    End-to-end guided Supabase heartbeat + Cloudflare Workers Cron installer.

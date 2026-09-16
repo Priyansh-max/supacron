@@ -260,7 +260,7 @@ test("init removes its temporary setup workspace and can logout official CLIs", 
     ["logout", "cloudflare"],
   ]);
   assert.match(output.text(), /Finish/);
-  assert.match(output.text(), /Removed temporary setup workspace/);
+  assert.match(output.text(), /Removed Supacron temp workspace/);
   assert.match(output.text(), /Supabase CLI logged out/);
   assert.match(output.text(), /Cloudflare Wrangler logged out/);
 });

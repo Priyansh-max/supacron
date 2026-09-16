@@ -461,9 +461,9 @@ async function cleanupSetupWorkspace({ setupWorkspace, dependencies, out }) {
 
   if (out) {
     if (result.removed.length === 0) {
-      status(out, "success", "Temporary setup workspace already clean.");
+      status(out, "success", "Supacron temp workspace already clean. Project files were not touched.");
     } else {
-      status(out, "success", "Removed temporary setup workspace.");
+      status(out, "success", "Removed Supacron temp workspace. Project files were not touched.");
     }
 
     for (const skipped of result.skipped) {
@@ -857,7 +857,7 @@ function writeFinalReport({ out, report }) {
   keyValue(out, "Supabase", report.supabaseDashboardUrl);
   keyValue(out, "SQL editor", report.sqlEditorUrl);
   keyValue(out, "Cloudflare", report.cloudflareDashboardUrl);
-  keyValue(out, "Proof", "supacron test");
+  keyValue(out, "Proof", "npx supacron test");
 }
 
 function requireNonEmptyProjects(projects) {

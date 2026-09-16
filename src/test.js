@@ -198,7 +198,7 @@ async function cleanupWorkerProof({
       status(out, "success", "Final private scheduled Worker restored.");
     } catch (error) {
       cleanupError = error;
-      status(out, "warn", "Final Worker restore failed. Run supacron test again or redeploy the Worker from Cloudflare.");
+      status(out, "warn", "Final Worker restore failed. Run npx supacron test again or redeploy the Worker from Cloudflare.");
     }
   }
 
@@ -224,7 +224,7 @@ async function resolveManifest({ parsed, dependencies }) {
     throw new Error("No Supacron installation receipt found. Run supacron init first.");
   }
 
-  throw new Error("Multiple Supacron installation receipts found. Run supacron test --project-ref <ref>.");
+  throw new Error("Multiple Supacron installation receipts found. Run npx supacron test --project-ref <ref>.");
 }
 
 async function cleanupWorkspace({ setupWorkspace, dependencies, out }) {
