@@ -713,7 +713,7 @@ function supportsInteractiveList(out) {
 
 async function chooseFromInteractiveList({ question, choices }) {
   let selectedIndex = 0;
-  let renderedLines = 0;
+  let renderedRows = 0;
   const input = process.stdin;
   const output = process.stdout;
 
@@ -733,8 +733,9 @@ async function chooseFromInteractiveList({ question, choices }) {
     }
 
     function render() {
-      if (renderedLines > 0) {
-        readline.moveCursor(output, 0, -renderedLines);
+      if (renderedRows > 0) {
+        readline.moveCursor(output, 0, -renderedRows);
+        readline.clearScreenDown(output);
       } else {
         output.write("\n");
       }
@@ -755,7 +756,7 @@ async function chooseFromInteractiveList({ question, choices }) {
         readline.clearLine(output, 0);
         output.write(`${line}\n`);
       }
-      renderedLines = lines.length;
+      renderedRows = countRenderedRows(lines, output);
     }
 
     function finish(choice) {
@@ -788,6 +789,21 @@ async function chooseFromInteractiveList({ question, choices }) {
     input.on("keypress", onKeypress);
     render();
   });
+}
+
+function countRenderedRows(lines, output) {
+  const columns = Number.isSafeInteger(output.columns) && output.columns > 0
+    ? output.columns
+    : 80;
+
+  return lines.reduce((total, line) => {
+    const length = visibleLength(line);
+    return total + Math.max(1, Math.ceil(length / columns));
+  }, 0);
+}
+
+function visibleLength(value) {
+  return String(value).replace(/\x1b\[[0-9;]*m/g, "").length;
 }
 
 async function requireApproval({ rl, out, parsed, flag, question, defaultValue }) {
