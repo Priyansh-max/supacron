@@ -30,6 +30,7 @@ import {
   verifyDeployedWorker,
 } from "./cloudflare/deploy.js";
 import { cleanupLocalSetupFiles, createLocalSetupWorkspace } from "./local-cleanup.js";
+import { createManifest, writeManifest } from "./lib/manifest.js";
 import {
   bullet,
   choiceLine,
@@ -184,6 +185,28 @@ export async function init(args = [], dependencies = {}) {
     }
 
     const dashboardUrl = cloudflareWorkerUrl(account.id, workerName);
+    const now = dependencies.now || new Date().toISOString();
+    const manifest = createManifest({
+      now,
+      projectRef: project.ref,
+      projectName: project.name,
+      region: project.region,
+      supabaseDashboardUrl: projectDashboardUrl(project.ref),
+      supabaseProjectUrl: supabaseUrl,
+      setupMode,
+      databaseVerifiedAt: now,
+      cloudflareAccountId: account.id,
+      cloudflareAccountName: account.name,
+      workerName,
+      workerUrl: deployment.workersDevUrl,
+      schedule,
+      cloudflareDashboardUrl: dashboardUrl,
+      deployedAt: now,
+      verificationStatus: "verified",
+      lastCheckedAt: now,
+      lastHeartbeatAt: heartbeatCheck.lastPingAt || deployment.lastPingAt || now,
+    });
+    const manifestFile = await (dependencies.writeInstallManifest || writeManifest)(manifest);
     const report = {
       ok: true,
       mode: setupMode,
@@ -196,6 +219,8 @@ export async function init(args = [], dependencies = {}) {
       sqlEditorUrl: projectSqlEditorUrl(project.ref),
       cloudflareDashboardUrl: dashboardUrl,
       heartbeat: heartbeatCheck,
+      manifest,
+      manifestFile,
     };
     writeFinalReport({ out, report });
     report.postSetup = await runPostSetupFinish({ parsed, rl, out, setupWorkspace, dependencies });
@@ -816,6 +841,7 @@ function writeFinalReport({ out, report }) {
   keyValue(out, "Supabase", report.supabaseDashboardUrl);
   keyValue(out, "SQL editor", report.sqlEditorUrl);
   keyValue(out, "Cloudflare", report.cloudflareDashboardUrl);
+  keyValue(out, "Proof", "supacron test");
 }
 
 function requireNonEmptyProjects(projects) {

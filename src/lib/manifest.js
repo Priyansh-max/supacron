@@ -158,6 +158,43 @@ export async function readManifest(projectRef, options = {}) {
   }
 }
 
+export async function listManifests(options = {}) {
+  const rootDir = options.rootDir || defaultManifestDir(options);
+  const dir = path.join(rootDir, "installations");
+
+  let entries;
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return [];
+    }
+
+    throw error;
+  }
+
+  const manifests = [];
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".json")) {
+      continue;
+    }
+
+    const projectRef = entry.name.slice(0, -".json".length);
+    if (!/^[a-z0-9]{20}$/.test(projectRef)) {
+      continue;
+    }
+
+    const manifest = await readManifest(projectRef, { ...options, rootDir });
+    if (manifest) {
+      manifests.push(manifest);
+    }
+  }
+
+  return manifests.sort((left, right) =>
+    left.supabase.projectRef.localeCompare(right.supabase.projectRef),
+  );
+}
+
 export async function writeManifest(manifest, options = {}) {
   const validManifest = validateManifest(manifest);
   const filePath = manifestPath(validManifest.supabase.projectRef, options);

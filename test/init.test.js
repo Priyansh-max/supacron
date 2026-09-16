@@ -65,6 +65,7 @@ test("init manual mode fallback prints SQL, verifies, deploys Cloudflare, and wr
       lastPingAt: "2026-09-14T15:01:00.000Z",
       pingCount: 1,
     }),
+    writeInstallManifest: async () => "C:\\Temp\\supacron-manifest.json",
   });
 
   assert.equal(result.ok, true);
@@ -130,6 +131,7 @@ test("init defaults to automatic guided setup and runs shown SQL only after expl
       lastPingAt: "2026-09-14T15:02:00.000Z",
       pingCount: 1,
     }),
+    writeInstallManifest: async () => "C:\\Temp\\supacron-manifest.json",
   });
 
   assert.deepEqual(calls[0], ["link-project", PROJECT.ref]);
@@ -196,6 +198,7 @@ test("init custom schedule retries invalid cron before showing Cloudflare plan",
       lastPingAt: "2026-09-14T15:02:00.000Z",
       pingCount: 1,
     }),
+    writeInstallManifest: async () => "C:\\Temp\\supacron-manifest.json",
   });
 
   assert.equal(result.schedule, "*/15 * * * *");
@@ -241,6 +244,7 @@ test("init removes its temporary setup workspace and can logout official CLIs", 
       lastPingAt: "2026-09-14T15:02:00.000Z",
       pingCount: 1,
     }),
+    writeInstallManifest: async () => "C:\\Temp\\supacron-manifest.json",
     cleanupLocalSetupFiles: async (request) => {
       calls.push(["cleanup", request.workspaceDir]);
       return { removed: [request.workspaceDir], skipped: [] };
