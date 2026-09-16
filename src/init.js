@@ -48,12 +48,12 @@ const SETUP_MODES = [
   {
     value: "automatic",
     label: "Automatic guided setup (recommended)",
-    description: "Supacron applies the shown SQL with the official Supabase CLI after approval.",
+    description: "Approve once, then Supacron creates the heartbeat objects for you.",
   },
   {
     value: "manual",
     label: "Manual SQL fallback",
-    description: "Supacron prints SQL for you to run in Supabase, then verifies it.",
+    description: "Show the full SQL so you can read or run it yourself.",
   },
 ];
 
@@ -76,7 +76,7 @@ const SCHEDULE_PRESETS = [
   {
     value: "custom",
     label: "Custom cron expression",
-    description: "Enter your own 5-field cron schedule.",
+    description: "Type your own 5-field cron schedule.",
   },
 ];
 
@@ -84,12 +84,12 @@ const SESSION_CHOICES = [
   {
     value: "remember",
     label: "Remember me",
-    description: "Keep Supabase CLI and Wrangler logged in for future CLI use.",
+    description: "Keep Supabase CLI and Wrangler logged in on this machine.",
   },
   {
     value: "logout",
     label: "Logout",
-    description: "Logout from both Supabase CLI and Cloudflare Wrangler.",
+    description: "Sign out of both CLIs after setup.",
   },
 ];
 
@@ -160,7 +160,7 @@ export async function init(args = [], dependencies = {}) {
       out,
       parsed,
       flag: "approve-cloudflare",
-      question: "Deploy this Cloudflare Worker and stream secrets through Wrangler now?",
+      question: "Deploy this scheduled Worker now?",
       defaultValue: false,
     });
 
@@ -253,7 +253,7 @@ export async function discoverSupabaseProjects(dependencies, out) {
     }
 
     write(out, "");
-    write(out, "Supabase login required. Opening the official Supabase CLI browser flow.");
+    write(out, "Supabase login is needed. Opening the official Supabase CLI login.");
     await (dependencies.loginSupabase || supabaseLogin)();
     return requireNonEmptyProjects(await getProjects());
   }
@@ -269,7 +269,7 @@ export async function discoverCloudflareAccounts(dependencies, out) {
     }
 
     write(out, "");
-    write(out, "Cloudflare login required. Opening Wrangler device login with narrow Worker scopes.");
+    write(out, "Cloudflare login is needed. Opening the official Wrangler login.");
     await (dependencies.loginCloudflare || cloudflareLogin)();
     return requireNonEmptyAccounts(await getAccounts());
   }
@@ -288,7 +288,7 @@ export async function setupDatabase({
 }) {
   if (mode === "manual") {
     section(out, "Manual Supabase SQL");
-    status(out, "info", "Open the SQL editor link below, run this SQL, then come back here.");
+    status(out, "info", "Review the SQL below, run it in Supabase, then come back here.");
     keyValue(out, "SQL editor", projectSqlEditorUrl(project.ref));
     write(out, "");
     write(out, installSql);
@@ -297,25 +297,25 @@ export async function setupDatabase({
       out,
       parsed,
       flag: "confirm-manual-sql",
-      question: "I have run the SQL successfully in Supabase.",
+      question: "I ran this SQL successfully in Supabase.",
       defaultValue: false,
     });
-    status(out, "info", "Linking Supabase project for CLI SQL access...");
+    status(out, "info", "Connecting the Supabase CLI to this project...");
     linkProject({ projectRef: project.ref });
-    status(out, "success", "Supabase project linked.");
+    status(out, "success", "Supabase CLI connected.");
   } else if (mode === "automatic") {
     await requireApproval({
       rl,
       out,
       parsed,
       flag: "approve-sql",
-      question: "Run the shown SQL using the official Supabase CLI now?",
+      question: "Apply this Supabase setup now?",
       defaultValue: false,
     });
-    status(out, "info", "Linking Supabase project for CLI SQL access...");
+    status(out, "info", "Connecting the Supabase CLI to this project...");
     linkProject({ projectRef: project.ref });
-    status(out, "success", "Supabase project linked.");
-    status(out, "info", "Applying Supabase SQL with the official CLI...");
+    status(out, "success", "Supabase CLI connected.");
+    status(out, "info", "Creating the Supacron heartbeat objects in Supabase...");
     executeSql({
       projectRef: project.ref,
       sql: installSql,
@@ -332,7 +332,7 @@ export async function setupDatabase({
   if (!structure.ok) {
     throw new Error("Supabase verification failed: expected table, RPC, or RLS policy was missing.");
   }
-  status(out, "success", "Supabase verification passed.");
+  status(out, "success", "Supabase heartbeat objects are ready.");
   return structure;
 }
 
@@ -353,7 +353,7 @@ export async function deployCloudflareCron({
   const verifyWorker = dependencies.verifyWorker || verifyDeployedWorker;
 
   section(out, "Cloudflare deployment");
-  status(out, "info", "Deploying temporary verification Worker...");
+  status(out, "info", "Preparing a temporary setup test...");
   const bootstrap = deploy({
     accountId: account.id,
     workerName,
@@ -361,11 +361,11 @@ export async function deployCloudflareCron({
     verification: true,
     declareSecrets: false,
   });
-  status(out, "success", "Temporary verification Worker deployed.");
+  status(out, "success", "Temporary setup test ready.");
 
   let verificationSecretWritten = false;
   try {
-    status(out, "info", "Writing Cloudflare Worker secrets through Wrangler stdin...");
+    status(out, "info", "Saving Worker secrets in Cloudflare...");
     for (const [key, value] of [
       ["SUPABASE_URL", supabaseUrl],
       ["SUPABASE_PUBLISHABLE_KEY", publishableKey],
@@ -382,9 +382,9 @@ export async function deployCloudflareCron({
         verificationSecretWritten = true;
       }
     }
-    status(out, "success", "Cloudflare Worker secrets written.");
+    status(out, "success", "Worker secrets saved in Cloudflare.");
 
-    status(out, "info", "Redeploying verification Worker with required secret bindings...");
+    status(out, "info", "Enabling temporary live test access...");
     const verificationDeploy = deploy({
       accountId: account.id,
       workerName,
@@ -393,25 +393,25 @@ export async function deployCloudflareCron({
       declareSecrets: true,
     });
     const workersDevUrl = verificationDeploy.workersDevUrl || bootstrap.workersDevUrl;
-    status(out, "success", "Verification Worker redeployed.");
+    status(out, "success", "Temporary test access enabled.");
 
-    status(out, "info", "Running one verification heartbeat...");
+    status(out, "info", "Sending one live heartbeat...");
     const workerCheck = await verifyWorker({
       workersDevUrl,
       verifySecret,
     });
-    status(out, "success", "Verification heartbeat passed.");
+    status(out, "success", "Live heartbeat confirmed.");
 
-    status(out, "info", "Removing temporary verification secret...");
+    status(out, "info", "Cleaning up temporary test access...");
     removeSecret({
       accountId: account.id,
       workerName,
       key: "SUPACRON_VERIFY_SECRET",
     });
     verificationSecretWritten = false;
-    status(out, "success", "Temporary verification secret removed.");
+    status(out, "success", "Temporary test access removed.");
 
-    status(out, "info", "Deploying final scheduled Worker with no public HTTP route...");
+    status(out, "info", "Switching Worker back to scheduled-only mode...");
     deploy({
       accountId: account.id,
       workerName,
@@ -419,7 +419,7 @@ export async function deployCloudflareCron({
       verification: false,
       declareSecrets: true,
     });
-    status(out, "success", "Final scheduled Worker deployed.");
+    status(out, "success", "Worker is scheduled-only.");
 
     return {
       workersDevUrl,
@@ -435,7 +435,7 @@ export async function deployCloudflareCron({
           key: "SUPACRON_VERIFY_SECRET",
         });
       } catch {
-        status(out, "warn", "Temporary verification secret cleanup failed. Remove SUPACRON_VERIFY_SECRET in Cloudflare.");
+        status(out, "warn", "Temporary test access cleanup failed. Remove SUPACRON_VERIFY_SECRET in Cloudflare.");
       }
     }
   }
@@ -546,15 +546,15 @@ async function runOptionalLogout({ label, logout, out }) {
 
 async function discoverPublishableKey({ project, dependencies, out }) {
   section(out, "Supabase public key");
-  status(out, "info", "Discovering public API key without revealing secret keys...");
+  status(out, "info", "Finding a public Supabase key for the Worker...");
   const keys = await (dependencies.listPublishableKeys || listPublishableKeys)({
     projectRef: project.ref,
   });
   if (keys.length === 0) {
-    throw new Error("No Supabase public anon/publishable key was returned. Supacron will not ask for secret/service-role keys.");
+    throw new Error("No public Supabase anon/publishable key was returned. Supacron will not ask for secret or service-role keys.");
   }
 
-  status(out, "success", `Found ${keys.length} public API key(s). The key value is not printed.`);
+  status(out, "success", `Found ${keys.length} public key(s). The key value is not printed.`);
   return keys[0];
 }
 
@@ -646,13 +646,13 @@ async function chooseSchedule({ parsed, rl, out }) {
   }
 
   section(out, "Custom schedule");
-  write(out, muted(out, "  Use 5 cron fields, for example: */15 * * * *"));
+  write(out, muted(out, "  Enter 5 cron fields, for example: */15 * * * *"));
   while (true) {
-    const answer = (await askRaw(rl, "Cron expression: ")).trim();
+    const answer = (await askClean(rl, out, "Cron expression: ")).trim();
     try {
       return requireValidSchedule(answer);
     } catch {
-      status(out, "warn", "Invalid cron expression. Use exactly 5 fields, for example: 0 0,12 * * *");
+      status(out, "warn", "That cron expression is not valid. Use 5 fields, for example: 0 0,12 * * *");
     }
   }
 }
@@ -748,7 +748,7 @@ async function chooseFromInteractiveList({ question, choices }) {
       const lines = [
         color(output, "blue", strong(output, question)),
         ...choices.map((choice, index) => choiceLine(output, choice, index === selectedIndex, optionWidth)),
-        muted(output, "Use arrow keys and Enter."),
+        muted(output, "Use Up/Down, then Enter."),
       ];
 
       for (const line of lines) {
@@ -823,26 +823,27 @@ async function requireApproval({ rl, out, parsed, flag, question, defaultValue }
 }
 
 function writeDatabasePlan({ out, project, installSql }) {
-  section(out, "Supabase change plan");
+  section(out, "Supabase setup plan");
   keyValue(out, "Project", `${project.name} (${project.ref})`);
-  keyValue(out, "SQL", `${installSql.split(/\r?\n/).length} lines, heartbeat secret stored only as SHA-256 digest`);
-  bullet(out, "schema: supacron");
-  bullet(out, "table: supacron.heartbeat");
-  bullet(out, "RPC: public.supacron_ping(text)");
-  bullet(out, "RLS, revokes, and grants for Supacron-owned objects");
-  write(out, muted(out, "  No database passwords, connection strings, service-role keys, or Supabase access tokens."));
+  keyValue(out, "SQL", `${installSql.split(/\r?\n/).length} lines. The heartbeat secret is stored only as a SHA-256 digest.`);
+  bullet(out, "create schema supacron");
+  bullet(out, "create table supacron.heartbeat for the latest cron ping");
+  bullet(out, "create RPC public.supacron_ping(text) for the Worker to call");
+  bullet(out, "lock down access with RLS, revokes, and narrow grants");
+  write(out, muted(out, "  Want to inspect every line first? Choose Manual SQL fallback on the next screen."));
+  write(out, muted(out, "  Supacron never asks for database passwords, connection strings, service-role keys, or Supabase access tokens."));
 }
 
 function writeCloudflarePlan({ out, account, workerName, schedule }) {
-  section(out, "Cloudflare change plan");
+  section(out, "Cloudflare setup plan");
   keyValue(out, "Account", `${account.name} (${account.id})`);
   keyValue(out, "Worker", workerName);
   keyValue(out, "Schedule", schedule);
-  bullet(out, "deploy through Wrangler");
-  bullet(out, "stream Worker secrets through stdin");
-  bullet(out, "run one temporary verification endpoint");
-  bullet(out, "remove the verification secret and deploy the final private cron Worker");
-  write(out, muted(out, `  Bindings: ${SECRET_BINDINGS.join(", ")}`));
+  bullet(out, "deploy or update this Worker with Wrangler");
+  bullet(out, "save secrets directly into Cloudflare through Wrangler stdin");
+  bullet(out, "run one temporary live test to prove the heartbeat works");
+  bullet(out, "remove temporary test access and leave the Worker in scheduled-only mode");
+  write(out, muted(out, `  Worker bindings: ${SECRET_BINDINGS.join(", ")}`));
 }
 
 function writeFinalReport({ out, report }) {
@@ -880,6 +881,16 @@ function randomHex(byteLength, randomBytes = crypto.randomBytes) {
 
 function writeBanner(out) {
   renderBanner(out, BANNER);
+}
+
+async function askClean(rl, out, question) {
+  const answer = await rl.question(question);
+  if (supportsInteractiveList(out)) {
+    readline.moveCursor(process.stdout, 0, -1);
+    readline.clearLine(process.stdout, 0);
+    readline.cursorTo(process.stdout, 0);
+  }
+  return answer;
 }
 
 async function askRaw(rl, question) {

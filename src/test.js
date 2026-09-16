@@ -91,7 +91,7 @@ async function runLiveWorkerProof({ manifest, projectRef, executeSql, dependenci
   let result = null;
 
   try {
-    status(out, "info", "Adding temporary Worker verification secret...");
+    status(out, "info", "Preparing temporary test access...");
     await putSecret({
       accountId,
       workerName,
@@ -99,9 +99,9 @@ async function runLiveWorkerProof({ manifest, projectRef, executeSql, dependenci
       value: verifySecret,
     });
     verificationSecretWritten = true;
-    status(out, "success", "Temporary verification secret added.");
+    status(out, "success", "Temporary test access prepared.");
 
-    status(out, "info", "Deploying temporary live verification route...");
+    status(out, "info", "Enabling temporary live test access...");
     const verificationDeploy = await deploy({
       accountId,
       workerName,
@@ -110,16 +110,16 @@ async function runLiveWorkerProof({ manifest, projectRef, executeSql, dependenci
       declareSecrets: true,
     });
     verificationRouteDeployed = true;
-    status(out, "success", "Temporary live verification route deployed.");
+    status(out, "success", "Temporary live test access enabled.");
 
-    status(out, "info", "Running a live heartbeat through the deployed Worker...");
+    status(out, "info", "Testing the deployed Cloudflare Worker...");
     const worker = await verifyWorker({
       workersDevUrl: verificationDeploy.workersDevUrl || manifest.cloudflare.workerUrl,
       verifySecret,
     });
-    status(out, "success", "Live Worker heartbeat passed.");
+    status(out, "success", "Live heartbeat confirmed.");
 
-    status(out, "info", "Verifying the heartbeat row in Supabase...");
+    status(out, "info", "Checking Supabase for the new heartbeat...");
     const heartbeat = await verifyDbHeartbeat({
       projectRef,
       execute: executeSql,
@@ -127,7 +127,7 @@ async function runLiveWorkerProof({ manifest, projectRef, executeSql, dependenci
     if (!heartbeat.ok) {
       throw new Error("Supacron test failed: Worker ran, but Supabase did not show the heartbeat row yet.");
     }
-    status(out, "success", "Supabase heartbeat proof found.");
+    status(out, "success", "Supabase proof confirmed.");
     result = { worker, heartbeat };
   } catch (error) {
     caughtError = error;
@@ -172,22 +172,22 @@ async function cleanupWorkerProof({
 
   if (verificationSecretWritten) {
     try {
-      status(out, "info", "Removing temporary verification secret...");
+      status(out, "info", "Cleaning up temporary test access...");
       await removeSecret({
         accountId,
         workerName,
         key: "SUPACRON_VERIFY_SECRET",
       });
-      status(out, "success", "Temporary verification secret removed.");
+      status(out, "success", "Temporary test access removed.");
     } catch (error) {
       cleanupError = error;
-      status(out, "warn", "Temporary verification secret cleanup failed. Remove SUPACRON_VERIFY_SECRET in Cloudflare.");
+      status(out, "warn", "Temporary test access cleanup failed. Remove SUPACRON_VERIFY_SECRET in Cloudflare.");
     }
   }
 
   if (verificationRouteDeployed) {
     try {
-      status(out, "info", "Restoring final private scheduled Worker...");
+      status(out, "info", "Restoring scheduled-only mode...");
       await deploy({
         accountId,
         workerName,
@@ -195,7 +195,7 @@ async function cleanupWorkerProof({
         verification: false,
         declareSecrets: true,
       });
-      status(out, "success", "Final private scheduled Worker restored.");
+      status(out, "success", "Worker is back in scheduled-only mode.");
     } catch (error) {
       cleanupError = error;
       status(out, "warn", "Final Worker restore failed. Run npx supacron test again or redeploy the Worker from Cloudflare.");
@@ -252,7 +252,7 @@ function writeProofReport({ out, report }) {
   status(out, "success", "A live deployed Worker request wrote a fresh Supabase heartbeat.");
   keyValue(out, "Last ping", heartbeat.lastPingAt || worker.lastPingAt || "verified");
   keyValue(out, "Ping count", Number.isSafeInteger(heartbeat.pingCount) ? heartbeat.pingCount : "verified");
-  keyValue(out, "Route", "temporary verification route removed");
+  keyValue(out, "Access", "temporary test access removed");
   section(out, "Verify in dashboard");
   keyValue(out, "Supabase", manifest.supabase.dashboardUrl || projectDashboardUrl(manifest.supabase.projectRef));
   keyValue(out, "SQL editor", projectSqlEditorUrl(manifest.supabase.projectRef));

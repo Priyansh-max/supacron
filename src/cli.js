@@ -48,7 +48,7 @@ Usage:
 Commands:
   setup    End-to-end guided Supabase heartbeat + Cloudflare Workers Cron installer.
   init     Alias for setup.
-  test     Run a live deployed Worker heartbeat proof, then restore the private scheduled Worker.
+  test     Run a live deployed Worker heartbeat proof, then restore scheduled-only mode.
 
 Setup never asks for database passwords, connection strings, service-role keys, Supabase access tokens, or Cloudflare API tokens.
 After setup, Supacron removes its temporary setup workspace. You can choose whether official CLI sessions stay remembered or get logged out.

@@ -36,8 +36,8 @@ test("terminal UI renders a compact branded setup banner", () => {
 
   assert.match(buffer, /\+-+\+/);
   assert.match(buffer, /\| SUPACRON\s+\|/);
-  assert.match(buffer, /secure setup/);
-  assert.match(buffer, /Official CLIs only/);
+  assert.match(buffer, /Private cron, visible proof/);
+  assert.match(buffer, /Cloudflare runs the timer/);
   assert.doesNotMatch(buffer, /\x1b\[/);
 });
 
@@ -50,7 +50,7 @@ test("terminal UI places the active selection marker on the right", () => {
 
   assert.equal(
     choiceLine(out, choice, true, 48),
-    "  Twice daily (recommended) - 0 0,12 * * *         >",
+    "  Twice daily (recommended) - 0 0,12 * * *         <",
   );
   assert.equal(
     choiceLine(out, choice, false, 48),

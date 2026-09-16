@@ -100,7 +100,7 @@ test("supacron test runs a live Worker proof from the saved non-secret receipt",
   ]);
   assert.match(output.text(), /Proof/);
   assert.match(output.text(), /Last ping\s+2026-09-14T15:02:01.000Z/);
-  assert.match(output.text(), /temporary verification route removed/);
+  assert.match(output.text(), /temporary test access removed/);
   assert.match(output.text(), /Supabase/);
   assert.match(output.text(), /Cloudflare/);
   assert.doesNotMatch(output.text(), new RegExp(secret));

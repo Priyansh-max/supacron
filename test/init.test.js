@@ -139,7 +139,7 @@ test("init defaults to automatic guided setup and runs shown SQL only after expl
   assert.equal(calls[1][1], "Supacron database setup");
   assert.match(calls[1][2], /create schema if not exists supacron/i);
   assert.doesNotMatch(calls[1][2], /bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/);
-  assert.match(output.text(), /Run the shown SQL using the official Supabase CLI now\? yes/);
+  assert.match(output.text(), /Apply this Supabase setup now\? yes/);
 });
 
 
@@ -203,7 +203,7 @@ test("init custom schedule retries invalid cron before showing Cloudflare plan",
 
   assert.equal(result.schedule, "*/15 * * * *");
   assert.deepEqual([...new Set(deploys)], ["*/15 * * * *"]);
-  assert.match(output.text(), /Invalid cron expression/);
+  assert.match(output.text(), /That cron expression is not valid/);
   assert.match(output.text(), /Schedule\s+\*\/15 \* \* \* \*/);
 });
 test("init removes its temporary setup workspace and can logout official CLIs", async () => {
@@ -283,7 +283,7 @@ test("discoverSupabaseProjects uses official login recovery", async () => {
 
   assert.deepEqual(projects, [PROJECT]);
   assert.deepEqual(calls, ["supabase-login"]);
-  assert.match(output.text(), /official Supabase CLI browser flow/);
+  assert.match(output.text(), /official Supabase CLI login/);
 });
 
 test("deployCloudflareCron cleans temporary verification secret on verification failure", async () => {
