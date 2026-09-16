@@ -148,7 +148,7 @@ test("verification Worker accepts a legacy Supabase anon key", async () => {
   }
 });
 
-test("verification failure never returns the provider response body", async () => {
+test("verification failure returns only a safe failure reason", async () => {
   const worker = await importWorker({ verification: true });
   const originalFetch = globalThis.fetch;
   const originalError = console.error;
@@ -169,10 +169,14 @@ test("verification failure never returns the provider response body", async () =
         SUPACRON_VERIFY_SECRET: VERIFY_SECRET
       }
     );
-    const body = await response.text();
+    const body = await response.json();
 
     assert.equal(response.status, 502);
-    assert.doesNotMatch(body, /provider-secret-body/);
+    assert.deepEqual(body, {
+      ok: false,
+      error: "Supabase heartbeat failed with status 500."
+    });
+    assert.doesNotMatch(JSON.stringify(body), /provider-secret-body/);
     assert.doesNotMatch(logs.join("\n"), /provider-secret-body/);
   } finally {
     globalThis.fetch = originalFetch;

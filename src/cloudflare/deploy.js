@@ -136,13 +136,33 @@ export function deleteWorker({
 export async function verifyDeployedWorker({
   workersDevUrl,
   verifySecret,
-  fetchImpl = fetch
+  fetchImpl = fetch,
+  attempts = 4,
+  retryDelayMs = 1500,
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 }) {
   const endpoint = verificationEndpoint(workersDevUrl);
   if (typeof verifySecret !== "string" || verifySecret.length < 32 || /[\r\n]/.test(verifySecret)) {
     throw new Error("Invalid Cloudflare verification secret.");
   }
 
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await fetchVerification({ endpoint, verifySecret, fetchImpl });
+    } catch (error) {
+      lastError = error;
+      if (attempt >= attempts || !isRetryableVerificationError(error)) {
+        throw error;
+      }
+      await sleep(retryDelayMs * attempt);
+    }
+  }
+
+  throw lastError;
+}
+
+async function fetchVerification({ endpoint, verifySecret, fetchImpl }) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
   try {
@@ -152,7 +172,11 @@ export async function verifyDeployedWorker({
       signal: controller.signal
     });
     if (!response.ok) {
-      throw new Error(`Cloudflare verification failed with status ${response.status}.`);
+      const reason = await safeVerificationFailureReason(response);
+      const suffix = reason ? `: ${reason}` : "";
+      const error = new Error(`Cloudflare verification failed with status ${response.status}${suffix}.`);
+      error.status = response.status;
+      throw error;
     }
 
     const body = await response.json();
@@ -167,6 +191,34 @@ export async function verifyDeployedWorker({
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function safeVerificationFailureReason(response) {
+  if (!/json/i.test(response.headers.get("content-type") || "")) {
+    return "";
+  }
+
+  try {
+    const body = await response.json();
+    const message = typeof body?.error === "string" ? body.error.trim() : "";
+    if (isSafeVerificationMessage(message)) {
+      return message.replace(/\.$/, "");
+    }
+  } catch {
+    return "";
+  }
+  return "";
+}
+
+function isSafeVerificationMessage(message) {
+  return message.length > 0
+    && message.length <= 160
+    && !/[<>{}\r\n]/.test(message)
+    && !/sb_(?:secret|publishable)_|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+|postgres(?:ql)?:\/\//i.test(message);
+}
+
+function isRetryableVerificationError(error) {
+  return error?.status === 502 || error?.status === 503 || error?.name === "AbortError";
 }
 
 export function parseWorkersDevUrl(output, workerName) {

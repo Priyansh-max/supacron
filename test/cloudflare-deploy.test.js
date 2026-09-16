@@ -283,6 +283,58 @@ test("verifyDeployedWorker does not expose response bodies in failures", async (
   );
 });
 
+test("verifyDeployedWorker includes safe verification failure reasons", async () => {
+  await assert.rejects(
+    verifyDeployedWorker({
+      workersDevUrl: `https://${WORKER_NAME}.example.workers.dev`,
+      verifySecret: "v".repeat(48),
+      attempts: 1,
+      fetchImpl: async () => Response.json(
+        { ok: false, error: "Supabase heartbeat failed with status 500." },
+        { status: 502 }
+      )
+    }),
+    (error) => {
+      assert.equal(
+        error.message,
+        "Cloudflare verification failed with status 502: Supabase heartbeat failed with status 500."
+      );
+      assert.doesNotMatch(error.message, /provider-secret-body/);
+      return true;
+    }
+  );
+});
+
+test("verifyDeployedWorker retries transient verification failures", async () => {
+  let calls = 0;
+  const result = await verifyDeployedWorker({
+    workersDevUrl: `https://${WORKER_NAME}.example.workers.dev`,
+    verifySecret: "v".repeat(48),
+    retryDelayMs: 1,
+    sleep: async () => {},
+    async fetchImpl() {
+      calls += 1;
+      if (calls < 3) {
+        return Response.json(
+          { ok: false, error: "Supabase heartbeat failed with status 503." },
+          { status: 502 }
+        );
+      }
+      return Response.json({
+        ok: true,
+        last_ping_at: "2026-09-14T12:00:00Z",
+        ping_count: 5
+      });
+    }
+  });
+
+  assert.equal(calls, 3);
+  assert.deepEqual(result, {
+    ok: true,
+    lastPingAt: "2026-09-14T12:00:00Z",
+    pingCount: 5
+  });
+});
 function createJwt(payload) {
   const encode = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
   return `${encode({ alg: "HS256", typ: "JWT" })}.${encode(payload)}.signature`;

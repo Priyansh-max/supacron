@@ -30,9 +30,10 @@ export function createWorkerSource({ verification = false } = {}) {
 
     try {
       return Response.json(await ping(env));
-    } catch {
-      console.error(JSON.stringify({ event: "supacron.verify", ok: false }));
-      return Response.json({ ok: false, error: "Verification failed." }, { status: 502 });
+    } catch (error) {
+      const message = publicErrorMessage(error);
+      console.error(JSON.stringify({ event: "supacron.verify", ok: false, error: message }));
+      return Response.json({ ok: false, error: message }, { status: 502 });
     }
   }` : "";
 
@@ -70,6 +71,23 @@ function safeResult(value) {
     ping_count: Number.isSafeInteger(value?.ping_count) ? value.ping_count : null,
     source: value?.source === "cloudflare-cron" ? value.source : null
   };
+}
+
+function publicErrorMessage(error) {
+  const message = error instanceof Error ? error.message : "";
+  if (/^Supabase heartbeat failed with status \\d+\\.$/.test(message)) {
+    return message;
+  }
+  if (message === "Supabase heartbeat returned an invalid response.") {
+    return message;
+  }
+  if (/^Missing or invalid required binding: [A-Z0-9_]+$/.test(message)) {
+    return message;
+  }
+  if (error?.name === "AbortError") {
+    return "Supabase heartbeat timed out.";
+  }
+  return "Verification failed.";
 }
 
 async function secureEqual(left, right) {
