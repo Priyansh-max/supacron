@@ -37,7 +37,7 @@ import {
   color,
   keyValue,
   muted,
-  renderBannerIntro,
+  renderBanner,
   section,
   status,
   strong,
@@ -101,13 +101,10 @@ const SECRET_BINDINGS = [
 ];
 
 const BANNER = [
-  "        .----.                                       ",
-  "   .---| S  |---.  ____                            ",
-  "       `----`     / ___| _   _ _ __   __ _  ___    ",
-  "    cron pulse    \\___ \\| | | | `_ \\ / _` |/ __|   ",
-  "                  ___) | |_| | |_) | (_| | (__    ",
-  "                 |____/ \\__,_| .__/ \\__,_|\\___|   ",
-  "                              |_|        cron      ",
+  "  ___ _   _ ___   _   ___ ___  ___  _  _ ",
+  " / __| | | | _ \\ /_\\ / __| _ \\/ _ \\| \\| |",
+  " \\__ \\ |_| |  _// _ \\ (__|   / (_) | .` |",
+  " |___/\\___/|_| /_/ \\_\\___|_|_\\\\___/|_|\\_|",
 ].join("\n");
 
 export async function init(args = [], dependencies = {}) {
@@ -124,7 +121,7 @@ export async function init(args = [], dependencies = {}) {
     const executeSql = dependencies.executeSql || ((request) => executeProjectSql({ ...request, cwd: setupWorkspace }));
     const linkProject = dependencies.linkSupabaseProject || ((request) => linkSupabaseProject({ ...request, cwd: setupWorkspace }));
 
-    await writeBanner(out, dependencies);
+    writeBanner(out);
 
     const projects = await discoverSupabaseProjects(dependencies, out);
     const project = await chooseProject({ projects, parsed, rl, out });
@@ -882,11 +879,8 @@ function randomHex(byteLength, randomBytes = crypto.randomBytes) {
   return randomBytes(byteLength).toString("hex");
 }
 
-async function writeBanner(out, dependencies = {}) {
-  await renderBannerIntro(out, BANNER, {
-    env: dependencies.env,
-    sleep: dependencies.sleep,
-  });
+function writeBanner(out) {
+  renderBanner(out, BANNER);
 }
 
 async function askClean(rl, out, question) {

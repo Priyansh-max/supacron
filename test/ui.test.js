@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { choiceLine, color, renderBanner, renderBannerIntro, status, supportsColor } from "../src/ui.js";
+import { choiceLine, color, renderBanner, status, supportsColor } from "../src/ui.js";
 
 test("terminal UI disables color outside TTY and when NO_COLOR is set", () => {
   assert.equal(supportsColor({ isTTY: false }, {}), false);
@@ -56,20 +56,4 @@ test("terminal UI places the active selection marker on the right", () => {
     choiceLine(out, choice, false, 48),
     "  Twice daily (recommended) - 0 0,12 * * *",
   );
-});
-
-test("terminal UI can show a short interactive Supacron intro", async () => {
-  let buffer = "";
-  const out = {
-    isTTY: true,
-    write(chunk) {
-      buffer += chunk;
-    },
-  };
-
-  await renderBannerIntro(out, "SUPACRON", { env: {}, sleep: async () => {} });
-
-  assert.match(buffer, /warming up Supacron/);
-  assert.match(buffer, /SUPACRON/);
-  assert.match(buffer, /\x1b\[2K/);
 });
