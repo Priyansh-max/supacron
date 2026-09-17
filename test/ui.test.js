@@ -41,7 +41,7 @@ test("terminal UI renders a compact branded setup banner", () => {
   assert.doesNotMatch(buffer, /\x1b\[/);
 });
 
-test("terminal UI places the active selection marker on the right", () => {
+test("terminal UI places the active selection marker on the left", () => {
   const out = { isTTY: false };
   const choice = {
     label: "Twice daily (recommended)",
@@ -50,7 +50,7 @@ test("terminal UI places the active selection marker on the right", () => {
 
   assert.equal(
     choiceLine(out, choice, true, 48),
-    "  Twice daily (recommended) - 0 0,12 * * *         <",
+    "> Twice daily (recommended) - 0 0,12 * * *",
   );
   assert.equal(
     choiceLine(out, choice, false, 48),

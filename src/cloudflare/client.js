@@ -20,6 +20,10 @@ export function parseAccountsJson(raw) {
     throw new Error("Wrangler returned invalid account JSON.");
   }
 
+  if (parsed && parsed.loggedIn === false) {
+    throw new CloudflareAuthRequiredError();
+  }
+
   const candidates = Array.isArray(parsed.accounts)
     ? parsed.accounts
     : parsed.account && typeof parsed.account === "object"
@@ -47,7 +51,7 @@ export function listAccounts({ run = runNpx } = {}) {
     );
     return parseAccountsJson(result.stdout);
   } catch (error) {
-    if (error instanceof CommandError && isAuthenticationFailure(error.stderr)) {
+    if (error instanceof CommandError && isAuthenticationFailure(`${error.stderr}\n${error.stdout}`)) {
       throw new CloudflareAuthRequiredError();
     }
     throw error;
@@ -105,5 +109,5 @@ function cleanLabel(value, fallback) {
 }
 
 function isAuthenticationFailure(stderr) {
-  return /not logged in|auth token|expired|CLOUDFLARE_API_TOKEN|unauthorized/i.test(stderr);
+  return /not logged in|loggedIn"?\s*:\s*false|auth token|expired|CLOUDFLARE_API_TOKEN|unauthorized/i.test(stderr);
 }

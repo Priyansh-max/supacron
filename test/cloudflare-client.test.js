@@ -37,6 +37,12 @@ test("parseAccountsJson rejects malformed identity responses", () => {
   );
 });
 
+test("parseAccountsJson maps logged-out Wrangler JSON to auth required", () => {
+  assert.throws(
+    () => parseAccountsJson('{"loggedIn":false}'),
+    CloudflareAuthRequiredError
+  );
+});
 test("listAccounts maps expired authentication to a narrow error", () => {
   assert.throws(
     () => listAccounts({
@@ -50,6 +56,18 @@ test("listAccounts maps expired authentication to a narrow error", () => {
   );
 });
 
+test("listAccounts maps logged-out Wrangler output to auth required", () => {
+  assert.throws(
+    () => listAccounts({
+      run() {
+        throw new CommandError("failed", {
+          stderr: '{"loggedIn":false}'
+        });
+      }
+    }),
+    CloudflareAuthRequiredError
+  );
+});
 test("login requests only Worker deployment identity scopes", () => {
   const calls = [];
   login({

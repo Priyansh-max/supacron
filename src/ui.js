@@ -67,12 +67,10 @@ export function command(out, value) {
 
 export function choiceLine(out, choice, active, width = 0) {
   const detailText = choice.description ? ` - ${choice.description}` : "";
-  const visibleText = `${choice.label}${detailText}`;
   const label = active ? color(out, "green", strong(out, choice.label)) : choice.label;
   const detail = choice.description ? muted(out, detailText) : "";
-  const padding = active && width > visibleText.length ? " ".repeat(width - visibleText.length) : "";
-  const marker = active ? ` ${color(out, "green", "<")}` : "";
-  return `  ${label}${detail}${padding}${marker}`;
+  const marker = active ? color(out, "green", ">") : " ";
+  return `${marker} ${label}${detail}`;
 }
 
 export function renderBanner(out, banner) {

@@ -1,6 +1,6 @@
 {
   "name": "supacron",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Set up a transparent Supabase heartbeat with Cloudflare Workers Cron.",
   "type": "module",
   "bin": {
