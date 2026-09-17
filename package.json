@@ -4,7 +4,7 @@
   "description": "Set up a transparent Supabase heartbeat with Cloudflare Workers Cron.",
   "type": "module",
   "bin": {
-    "supacron": "./src/cli.js"
+    "supacron": "src/cli.js"
   },
   "files": [
     "src",
