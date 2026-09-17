@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { init } from "./init.js";
-import { createIssueUrl } from "./issue.js";
+import { createIssueUrl, formatIssueLink } from "./issue.js";
 import { logoutSessions } from "./logout.js";
 import { repair, status, uninstall } from "./lifecycle.js";
 import { testInstallation } from "./test.js";
@@ -35,8 +35,9 @@ try {
   if (details) {
     console.error(details);
   }
+  const issueUrl = createIssueUrl({ command, args, error, details });
   console.error("\nStill stuck? Open a prefilled GitHub issue:");
-  console.error(createIssueUrl({ command, args, error, details }));
+  console.error(formatIssueLink(issueUrl));
   process.exitCode = 1;
 }
 

@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 
 import { parseArgs } from "./args.js";
-import { cloudflareWorkerUrl } from "./cloudflare/client.js";
+import { cloudflareWorkerUrl, login as cloudflareLogin } from "./cloudflare/client.js";
 import {
   deleteWorkerSecret,
   deployWorker,
@@ -11,7 +11,7 @@ import {
 import { cleanupLocalSetupFiles, createLocalSetupWorkspace } from "./local-cleanup.js";
 import { listManifests, readManifest } from "./lib/manifest.js";
 import { linkProject as linkSupabaseProject, executeProjectSql } from "./supabase/query.js";
-import { projectDashboardUrl, projectSqlEditorUrl } from "./supabase/client.js";
+import { login as supabaseLogin, projectDashboardUrl, projectSqlEditorUrl } from "./supabase/client.js";
 import { verifyHeartbeat, verifyStructure } from "./supabase/verify.js";
 import { keyValue, section, status } from "./ui.js";
 
@@ -34,9 +34,7 @@ export async function testInstallation(args = [], dependencies = {}) {
     const linkProject = dependencies.linkSupabaseProject || ((request) =>
       linkSupabaseProject({ ...request, cwd: setupWorkspace }));
 
-    status(out, "info", "Linking Supabase project in a temporary workspace...");
-    await linkProject({ projectRef });
-    status(out, "success", "Supabase project linked for this test.");
+    await linkSupabaseForTest({ projectRef, linkProject, dependencies, out });
 
     status(out, "info", "Checking Supabase heartbeat objects...");
     const structure = await (dependencies.verifyDbStructure || verifyStructure)({
@@ -48,7 +46,7 @@ export async function testInstallation(args = [], dependencies = {}) {
     }
     status(out, "success", "Supabase objects are present.");
 
-    const proof = await runLiveWorkerProof({
+    const proof = await runLiveWorkerProofWithLoginRecovery({
       manifest,
       projectRef,
       executeSql,
@@ -73,6 +71,43 @@ export async function testInstallation(args = [], dependencies = {}) {
       await cleanupWorkspace({ setupWorkspace, dependencies, out: null });
     }
   }
+}
+
+async function linkSupabaseForTest({ projectRef, linkProject, dependencies, out }) {
+  status(out, "info", "Linking Supabase project in a temporary workspace...");
+  try {
+    await linkProject({ projectRef });
+  } catch (error) {
+    if (!isAuthFailure(error)) {
+      throw error;
+    }
+
+    status(out, "warn", "Supabase login is needed for this test. Opening the official Supabase CLI login...");
+    await (dependencies.loginSupabase || supabaseLogin)();
+    status(out, "info", "Retrying Supabase project link...");
+    await linkProject({ projectRef });
+  }
+  status(out, "success", "Supabase project linked for this test.");
+}
+
+async function runLiveWorkerProofWithLoginRecovery(request) {
+  try {
+    return await runLiveWorkerProof(request);
+  } catch (error) {
+    if (!isAuthFailure(error)) {
+      throw error;
+    }
+
+    status(request.out, "warn", "Cloudflare login is needed for this test. Opening the official Wrangler login...");
+    await (request.dependencies.loginCloudflare || cloudflareLogin)();
+    status(request.out, "info", "Retrying the live Cloudflare Worker proof...");
+    return runLiveWorkerProof(request);
+  }
+}
+
+function isAuthFailure(error) {
+  const text = `${error?.message || ""}\n${error?.stderr || ""}\n${error?.stdout || ""}`;
+  return /access token not provided|supabase login|not logged in|not authenticated|login required|unauthorized|auth token|expired|loggedIn"?\s*:\s*false/i.test(text);
 }
 
 async function runLiveWorkerProof({ manifest, projectRef, executeSql, dependencies, out }) {

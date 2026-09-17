@@ -30,6 +30,13 @@ export function createIssueUrl({
   return `${ISSUE_URL}?${params.toString()}`;
 }
 
+export function formatIssueLink(url, { stream = process.stderr, env = process.env, label = "Open prefilled GitHub issue" } = {}) {
+  if (supportsTerminalHyperlink(stream, env)) {
+    return `\u001b]8;;${url}\u001b\\${label}\u001b]8;;\u001b\\`;
+  }
+  return url;
+}
+
 export function buildIssueBody({
   command = "",
   args = [],
@@ -72,6 +79,20 @@ export function buildIssueBody({
   }
 
   return `${body.slice(0, MAX_BODY_LENGTH)}\n\n[Issue body trimmed by Supacron because the error output was very long.]`;
+}
+
+function supportsTerminalHyperlink(stream, env) {
+  return Boolean(
+    stream?.isTTY
+      && env.NO_COLOR == null
+      && (
+        env.WT_SESSION
+        || env.TERM_PROGRAM
+        || env.VTE_VERSION
+        || env.DOMTERM
+        || env.TERM?.includes("xterm")
+      )
+  );
 }
 
 function cleanErrorText(value) {

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildIssueBody, createIssueUrl } from "../src/issue.js";
+import { buildIssueBody, createIssueUrl, formatIssueLink } from "../src/issue.js";
 
 test("createIssueUrl opens GitHub issues with a prefilled sanitized body", () => {
   const url = new URL(createIssueUrl({
@@ -36,4 +36,21 @@ test("buildIssueBody trims very long provider output", () => {
 
   assert.ok(body.length < 8_000);
   assert.match(body, /Issue body trimmed/);
+});
+test("formatIssueLink uses a clean clickable label on supported terminals", () => {
+  const formatted = formatIssueLink("https://example.com/issue", {
+    stream: { isTTY: true },
+    env: { WT_SESSION: "1" },
+    label: "Open issue",
+  });
+
+  assert.match(formatted, /Open issue/);
+  assert.match(formatted, /\u001b\]8;;https:\/\/example\.com\/issue/);
+});
+
+test("formatIssueLink falls back to the URL when terminal hyperlinks are unavailable", () => {
+  assert.equal(
+    formatIssueLink("https://example.com/issue", { stream: { isTTY: false }, env: {} }),
+    "https://example.com/issue"
+  );
 });

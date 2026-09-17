@@ -158,3 +158,83 @@ function createOutput() {
     },
   };
 }
+test("supacron test opens Supabase login and retries after logout", async () => {
+  const calls = [];
+  let linkAttempts = 0;
+  const output = createOutput();
+
+  await testInstallation(["--project-ref", "abcdefghijklmnopqrst"], {
+    out: output,
+    randomBytes: (length) => Buffer.alloc(length, "e"),
+    readInstallManifest: async () => MANIFEST,
+    createLocalSetupWorkspace: async () => "C:\\Temp\\supacron-test",
+    linkSupabaseProject: async () => {
+      calls.push(["link"]);
+      linkAttempts += 1;
+      if (linkAttempts === 1) {
+        const error = new Error("Supabase project link failed with exit code 1.");
+        error.stderr = "Access token not provided. Supply an access token by running `supabase login`.";
+        throw error;
+      }
+    },
+    loginSupabase: async () => calls.push(["login-supabase"]),
+    verifyDbStructure: () => ({ ok: true, heartbeatTable: true, pingFunction: true, heartbeatPolicy: true }),
+    putWorkerSecret: ({ key }) => calls.push(["put", key]),
+    deployWorker: (request) => {
+      calls.push(["deploy", request.verification]);
+      return request.verification
+        ? { workersDevUrl: "https://supacron-abcdefghijklmnopqrst.example.workers.dev" }
+        : {};
+    },
+    verifyWorker: async () => ({ ok: true, lastPingAt: "2026-09-14T15:02:00.000Z", pingCount: 2 }),
+    verifyDbHeartbeat: () => ({ ok: true, lastPingAt: "2026-09-14T15:02:01.000Z", pingCount: 2 }),
+    deleteWorkerSecret: ({ key }) => calls.push(["delete", key]),
+    cleanupLocalSetupFiles: async () => ({ removed: [], skipped: [] }),
+  });
+
+  assert.deepEqual(calls.slice(0, 3), [["link"], ["login-supabase"], ["link"]]);
+  assert.match(output.text(), /Supabase login is needed for this test/);
+});
+
+test("supacron test opens Cloudflare login and retries after logout", async () => {
+  const calls = [];
+  let putAttempts = 0;
+  const output = createOutput();
+
+  await testInstallation(["--project-ref", "abcdefghijklmnopqrst"], {
+    out: output,
+    randomBytes: (length) => Buffer.alloc(length, "f"),
+    readInstallManifest: async () => MANIFEST,
+    createLocalSetupWorkspace: async () => "C:\\Temp\\supacron-test",
+    linkSupabaseProject: async () => calls.push(["link"]),
+    verifyDbStructure: () => ({ ok: true, heartbeatTable: true, pingFunction: true, heartbeatPolicy: true }),
+    putWorkerSecret: async ({ key }) => {
+      calls.push(["put", key]);
+      putAttempts += 1;
+      if (putAttempts === 1) {
+        const error = new Error("Cloudflare secret write failed with exit code 1.");
+        error.stderr = '{"loggedIn":false}';
+        throw error;
+      }
+    },
+    loginCloudflare: async () => calls.push(["login-cloudflare"]),
+    deployWorker: (request) => {
+      calls.push(["deploy", request.verification]);
+      return request.verification
+        ? { workersDevUrl: "https://supacron-abcdefghijklmnopqrst.example.workers.dev" }
+        : {};
+    },
+    verifyWorker: async () => ({ ok: true, lastPingAt: "2026-09-14T15:02:00.000Z", pingCount: 2 }),
+    verifyDbHeartbeat: () => ({ ok: true, lastPingAt: "2026-09-14T15:02:01.000Z", pingCount: 2 }),
+    deleteWorkerSecret: ({ key }) => calls.push(["delete", key]),
+    cleanupLocalSetupFiles: async () => ({ removed: [], skipped: [] }),
+  });
+
+  assert.deepEqual(calls.slice(0, 4), [
+    ["link"],
+    ["put", "SUPACRON_VERIFY_SECRET"],
+    ["login-cloudflare"],
+    ["put", "SUPACRON_VERIFY_SECRET"],
+  ]);
+  assert.match(output.text(), /Cloudflare login is needed for this test/);
+});
