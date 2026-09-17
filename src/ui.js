@@ -75,6 +75,13 @@ export function choiceLine(out, choice, active, width = 0) {
   return `  ${label}${detail}${padding}${marker}`;
 }
 
+export async function renderBannerIntro(out, banner, options = {}) {
+  if (supportsMotion(out, options.env)) {
+    await renderSupacronPulse(out, options.sleep || sleep);
+  }
+  renderBanner(out, banner);
+}
+
 export function renderBanner(out, banner) {
   const lines = banner.split("\n");
   const width = Math.max(...lines.map((line) => line.length), 58);
@@ -88,4 +95,41 @@ export function renderBanner(out, banner) {
   write(out, color(out, "blue", rule));
   write(out, `  ${color(out, "green", strong(out, "Private cron, visible proof."))}`);
   write(out, `  ${muted(out, "Cloudflare runs the timer. Supabase stores the heartbeat. You keep the keys.")}`);
+}
+
+function supportsMotion(out = process.stdout, env = process.env) {
+  return Boolean(
+    out?.isTTY
+      && env.CI !== "true"
+      && env.NO_COLOR == null
+      && env.NODE_DISABLE_COLORS == null
+      && env.SUPACRON_NO_ANIMATION == null
+      && env.TERM !== "dumb"
+  );
+}
+
+async function renderSupacronPulse(out, wait) {
+  const frames = [
+    "      .      ",
+    "     /S\\     ",
+    "    - S -    ",
+    "     \\S/     ",
+    "      '      ",
+    "     \\S/     ",
+    "    - S -    ",
+    "     /S\\     ",
+  ];
+
+  write(out, "");
+  for (let loop = 0; loop < 2; loop += 1) {
+    for (const frame of frames) {
+      out.write(`\r\x1b[2K${color(out, "cyan", frame)} ${muted(out, "warming up Supacron")}`);
+      await wait(55);
+    }
+  }
+  out.write("\r\x1b[2K");
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
