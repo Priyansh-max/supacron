@@ -13,7 +13,7 @@
 <br />
 <br />
 
-<img alt="version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-64D80D?style=flat-square&labelColor=111827" />
+<img alt="version 0.1.1" src="https://img.shields.io/badge/version-0.1.1-64D80D?style=flat-square&labelColor=111827" />
 <img alt="license MIT" src="https://img.shields.io/badge/license-MIT-64D80D?style=flat-square&labelColor=111827" />
 <img alt="runtime Node 20+" src="https://img.shields.io/badge/runtime-Node_20+-64D80D?style=flat-square&labelColor=111827" />
 
@@ -44,6 +44,12 @@ npx supacron test
 
 ```bash
 npx supacron setup
+```
+
+See every command:
+
+```bash
+npx supacron help
 ```
 
 ## What Supacron Does
@@ -99,6 +105,19 @@ Locally:
 
 `npm install` may create normal Node project files such as `node_modules`, `package.json`, and `package-lock.json`. Supacron does not delete project-owned npm files.
 
+## Commands
+
+```bash
+npx supacron init       # guided setup
+npx supacron test       # live heartbeat proof
+npx supacron status     # check saved install receipt and Supabase objects
+npx supacron repair     # redeploy the final private Worker from the receipt
+npx supacron uninstall  # remove Supacron-owned resources after approval
+npx supacron logout     # sign out of Supabase CLI and Cloudflare Wrangler
+npx supacron help       # show all commands
+```
+
+`logout` is useful when you chose to remember CLI sessions during setup and later want to sign out without running setup again.
 ## Proof Command
 
 Run:

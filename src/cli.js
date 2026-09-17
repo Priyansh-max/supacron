@@ -2,6 +2,7 @@
 
 import { init } from "./init.js";
 import { createIssueUrl } from "./issue.js";
+import { logoutSessions } from "./logout.js";
 import { repair, status, uninstall } from "./lifecycle.js";
 import { testInstallation } from "./test.js";
 
@@ -19,6 +20,8 @@ try {
     await testInstallation(args);
   } else if (command === "uninstall") {
     await uninstall(args);
+  } else if (command === "logout") {
+    await logoutSessions(args);
   } else if (command === "help" || command === "--help" || command === "-h") {
     printHelp();
   } else {
@@ -41,19 +44,29 @@ function printHelp() {
   console.log(`supacron
 
 Usage:
-  supacron setup
-  supacron setup --mode automatic|manual
-  supacron setup --project-ref <ref> --account-id <id>
-  supacron setup --session remember|logout
+  npx supacron init
   npx supacron test
-  npx supacron test --project-ref <ref>
+  npx supacron status
+  npx supacron repair
+  npx supacron uninstall
+  npx supacron logout
+  npx supacron help
+
+Setup options:
+  npx supacron init --mode automatic|manual
+  npx supacron init --project-ref <ref> --account-id <id>
+  npx supacron init --session remember|logout
 
 Commands:
-  setup    End-to-end guided Supabase heartbeat + Cloudflare Workers Cron installer.
-  init     Alias for setup.
-  test     Run a live deployed Worker heartbeat proof, then restore scheduled-only mode.
+  init       End-to-end Supabase heartbeat + Cloudflare Workers Cron setup.
+  setup      Alias for init.
+  test       Run a live Worker heartbeat proof, then restore scheduled-only mode.
+  status     Check the saved Supacron install receipt and Supabase heartbeat objects.
+  repair     Redeploy the final private Worker from the saved install receipt.
+  uninstall  Remove the Worker, Supacron-owned database objects, and local receipt after approval.
+  logout     Sign out of both official CLI sessions: Supabase CLI and Cloudflare Wrangler.
+  help       Show this command list.
 
-Setup never asks for database passwords, connection strings, service-role keys, Supabase access tokens, or Cloudflare API tokens.
-After setup, Supacron removes its temporary setup workspace. You can choose whether official CLI sessions stay remembered or get logged out.
+Supacron never asks for database passwords, connection strings, service-role keys, Supabase access tokens, or Cloudflare API tokens.
 `);
 }
