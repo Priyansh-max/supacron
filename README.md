@@ -1,23 +1,20 @@
 <div align="center">
 
-<h1>&#9201; Supacron</h1>
+<h1>Supacron</h1>
 
-<hr />
+<h3>Cloudflare Workers Cron -> Supabase heartbeat, installed from your terminal.</h3>
 
-<h3>Keep a Supabase project warm with one Cloudflare Cron heartbeat.</h3>
-
-<p><em>No backend. No service-role key. No stored local secrets. Your accounts -> official CLIs -> scheduled Worker -> protected Supabase RPC.</em></p>
+<p><em>Private cron. Visible proof. No service-role keys, database passwords, connection strings, Supabase access tokens, or Cloudflare API tokens.</em></p>
 
 <br />
 
-<a href="#install"><img alt="Get Started" src="https://img.shields.io/badge/GET_STARTED-64D80D?style=for-the-badge&labelColor=64D80D&color=64D80D" /></a>
+<a href="#quick-start"><img alt="Get Started" src="https://img.shields.io/badge/GET_STARTED-64D80D?style=for-the-badge&labelColor=64D80D&color=64D80D" /></a>
 
 <br />
 <br />
 
 <img alt="version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-64D80D?style=flat-square&labelColor=111827" />
 <img alt="license MIT" src="https://img.shields.io/badge/license-MIT-64D80D?style=flat-square&labelColor=111827" />
-<img alt="platform CLI" src="https://img.shields.io/badge/platform-CLI-64D80D?style=flat-square&labelColor=111827" />
 <img alt="runtime Node 20+" src="https://img.shields.io/badge/runtime-Node_20+-64D80D?style=flat-square&labelColor=111827" />
 
 <br />
@@ -26,64 +23,57 @@
 <img alt="Supabase" src="https://img.shields.io/badge/SUPABASE-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white&labelColor=111827" />
 <img alt="Cloudflare" src="https://img.shields.io/badge/CLOUDFLARE-F38020?style=for-the-badge&logo=cloudflare&logoColor=white&labelColor=111827" />
 <img alt="Workers" src="https://img.shields.io/badge/WORKERS-F6821F?style=for-the-badge&logo=cloudflareworkers&logoColor=white&labelColor=111827" />
-<img alt="Wrangler" src="https://img.shields.io/badge/WRANGLER-222222?style=for-the-badge&logo=cloudflare&logoColor=white&labelColor=111827" />
-<img alt="Secret safe" src="https://img.shields.io/badge/SECRET_SAFE-0F172A?style=for-the-badge&logo=shieldsdotio&logoColor=white&labelColor=111827" />
 
 </div>
 
-## Install
+## Quick Start
+
+Run the guided installer:
+
+```bash
+npx supacron init
+```
+
+After setup, run a live proof check any time:
+
+```bash
+npx supacron test
+```
+
+`setup` is also supported as an alias:
 
 ```bash
 npx supacron setup
 ```
 
-`setup` walks through the full secure setup and runs the provider CLI commands for you after approval:
+## What Supacron Does
 
-- Supabase browser login through the official CLI.
-- Project selection.
-- Automatic SQL setup by default, with manual fallback available.
-- Database structure verification.
-- Cloudflare browser login through Wrangler.
-- Worker Cron deployment.
-- One temporary verification endpoint.
-- Final scheduled-only Worker deployment.
-- Automatic cleanup of Supacron temporary setup files.
-- A final CLI session choice: remember me or logout.
-
-## Runtime Path
+Supacron installs a small scheduled Cloudflare Worker that calls a protected Supabase RPC on a cron schedule. Supabase stores the latest heartbeat timestamp and ping count, so you can verify that the scheduled Worker is actually running.
 
 ```txt
-Cloudflare Cron Trigger -> scheduled Worker -> Supabase REST RPC -> one heartbeat row update
+Cloudflare Cron Trigger -> scheduled Worker -> Supabase RPC -> supacron.heartbeat
 ```
 
-Supacron is intentionally narrow. It has no hosted backend, dashboard, account system, billing, analytics, queue, GitHub integration, or Vercel path.
+Supacron has no hosted backend, dashboard, billing system, analytics, queue, GitHub integration, or Vercel path. Your accounts remain yours.
 
-## Requirements
+## Setup Flow
 
-- Node.js 20 or newer.
-- A Supabase account with access to the target project.
-- A Cloudflare account that can deploy Workers.
-- Official provider CLIs available through `npx` during setup. Supacron invokes them internally; you should not have to run Wrangler or Supabase commands by hand during the guided flow.
+The installer walks through:
 
-Supacron pins the provider CLI packages it invokes and runs major setup commands inside the guided installer.
-
-## Setup Modes
-
-### Automatic SQL
-
-```bash
-npx supacron setup --mode automatic
-```
-
-Recommended and used by default. Supacron shows the SQL, asks again, applies it with the official Supabase CLI, verifies the database objects, then continues into Cloudflare deployment. If the required scoped provider authorization is not available, use manual mode.
-
-### Manual SQL
-
-```bash
-npx supacron setup --mode manual
-```
-
-Fallback mode. Supacron prints the exact SQL for you to run in Supabase SQL Editor, then verifies the installed objects. Supacron never receives a database-write credential in this mode.
+- Supabase login through the official Supabase CLI, if needed.
+- Supabase project selection.
+- A clear Supabase setup plan before SQL is applied.
+- Automatic SQL setup by default, with a manual SQL fallback if you want to inspect or run the SQL yourself.
+- Supabase object verification.
+- Cloudflare login through Wrangler, if needed.
+- Cloudflare account selection.
+- Cron schedule selection.
+- Worker deployment with secrets streamed through Wrangler stdin.
+- One temporary live test to prove the heartbeat works.
+- Removal of temporary test access.
+- Final scheduled-only Worker deployment.
+- Cleanup of Supacron's temporary setup workspace.
+- A final choice to keep provider CLI sessions remembered or log out.
 
 ## What It Creates
 
@@ -92,50 +82,107 @@ In Supabase:
 - Schema `supacron`.
 - Table `supacron.heartbeat`.
 - Function `public.supacron_ping(text)`.
+- RLS, revokes, and narrow grants for Supacron-owned objects.
 
 In Cloudflare:
 
-- One Worker named for the selected Supabase project.
+- One Worker named `supacron-<project-ref>` by default.
 - One Cron Trigger.
-- Worker secret bindings for the Supabase URL, publishable key, and heartbeat secret.
-- A temporary verification secret that is removed before the final deployment finishes.
+- Worker secret bindings for the Supabase URL, public Supabase key, and heartbeat secret.
+- A temporary verification secret during setup/test that is removed before the final scheduled-only Worker is restored.
 
 Locally:
 
-- A temporary Supacron setup workspace under the OS temp directory while setup is running.
-- No project-folder Supabase link cache.
-- No stored local secrets.
-- No persistent Supacron setup files after a successful install.
+- A temporary Supacron setup workspace under the OS temp directory while setup or test is running.
+- A small non-secret installation receipt in the user's app config directory so `npx supacron test` can find the Worker later.
+- No stored heartbeat secret, service-role key, database password, connection string, Supabase access token, or Cloudflare API token.
 
-At the end of setup, Supacron asks only whether to keep official CLI sessions remembered or logout from both Supabase CLI and Cloudflare Wrangler. CLI sessions are owned by the official provider CLIs and live outside the project folder.
+`npm install` may create normal Node project files such as `node_modules`, `package.json`, and `package-lock.json`. Supacron does not delete project-owned npm files.
+
+## Proof Command
+
+Run:
+
+```bash
+npx supacron test
+```
+
+It verifies the deployed setup by:
+
+- Loading the local non-secret receipt.
+- Checking the Supabase heartbeat objects.
+- Temporarily enabling live test access on the Worker.
+- Sending one live heartbeat through the deployed Worker.
+- Checking Supabase for the new heartbeat.
+- Removing temporary test access.
+- Restoring the Worker to scheduled-only mode.
+- Printing Supabase and Cloudflare links so you can verify the result yourself.
+
+If you have multiple Supacron receipts on the same machine, pass the project ref:
+
+```bash
+npx supacron test --project-ref <supabase-project-ref>
+```
+
+## Rerunning Setup
+
+Rerunning setup for the same Supabase project uses the same default Worker name:
+
+```txt
+supacron-<project-ref>
+```
+
+That means choosing a new schedule updates the existing Worker instead of creating a second default Worker.
+
+## Setup Modes
+
+Automatic mode is the default:
+
+```bash
+npx supacron init --mode automatic
+```
+
+Manual SQL fallback prints the full SQL for you to run in Supabase SQL Editor, then Supacron verifies the result:
+
+```bash
+npx supacron init --mode manual
+```
+
+## Session Choice
+
+At the end, Supacron asks whether to keep the official CLIs logged in on this machine or log out.
+
+You can script that choice:
+
+```bash
+npx supacron init --session remember
+npx supacron init --session logout
+```
+
+CLI sessions are owned by the official provider CLIs and live outside your project folder.
+
+## Requirements
+
+- Node.js 20 or newer.
+- A Supabase account with access to the target project.
+- A Cloudflare account that can deploy Workers.
+- Network access to run the official Supabase CLI and Wrangler through pinned `npx` package specs.
 
 ## Security Boundary
 
 Supacron never asks for database passwords, connection strings, service-role keys, Supabase access tokens, or Cloudflare API tokens.
 
-It generates the heartbeat secret in memory, stores only a SHA-256 digest in Supabase SQL, and streams the clear value to Wrangler over stdin so Cloudflare stores it as a Worker secret. The clear heartbeat secret is never written to command arguments, generated files, local storage, or logs.
+The heartbeat secret is generated locally in memory. Supacron stores only a SHA-256 digest in Supabase SQL and streams the clear value to Wrangler over stdin so Cloudflare stores it as a Worker secret. The clear heartbeat secret is not written to command arguments, generated files, local storage, or logs.
 
-The final Worker has no public HTTP handler. During installation, Supacron briefly deploys a secret-protected verification endpoint, calls it once, deletes its temporary secret, then deploys the final scheduled-only Worker.
-
-Supacron runs provider setup commands from an isolated temporary workspace and removes that workspace after a successful install.
-
-## Commands
-
-```bash
-npx supacron setup
-npx supacron setup --session remember
-npx supacron setup --session logout
-```
-
-`setup --session remember|logout` can script the final CLI session choice. `remember` keeps the official Supabase CLI and Wrangler sessions available for future CLI use. `logout` runs both official logout commands after the cron is installed and verified.
+The final Worker has no public HTTP handler. During setup and `test`, Supacron briefly deploys a secret-protected test route, calls it once, removes its temporary secret, and restores the final scheduled-only Worker.
 
 ## Package Contents
 
-`npm pack --dry-run` includes only:
+The published package includes only:
 
 - `LICENSE`
 - `README.md`
 - `package.json`
 - `src/**`
 
-Tests and architecture docs stay in the repository, not the published tarball.
+Tests and docs stay in the repository, not the npm tarball.

@@ -22,5 +22,13 @@
   "license": "MIT",
   "engines": {
     "node": ">=20"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Priyansh-max/supacron.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Priyansh-max/supacron/issues"
+  },
+  "homepage": "https://github.com/Priyansh-max/supacron#readme"
 }
