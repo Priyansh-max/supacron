@@ -500,8 +500,8 @@ test("uninstall recovers official Supabase and Cloudflare logins", async () => {
       deleteWorker: async () => {
         workerDeleteAttempts += 1;
         if (workerDeleteAttempts === 1) {
-          const error = new Error("Cloudflare Worker delete failed");
-          error.stderr = '{"loggedIn":false}';
+          const error = new Error("In a non-interactive environment, it's necessary to set a CLOUDFLARE_API_TOKEN environment variable for wrangler to work.");
+          error.stderr = "CLOUDFLARE_API_TOKEN is required";
           throw error;
         }
       },

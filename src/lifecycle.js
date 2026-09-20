@@ -283,7 +283,7 @@ async function rotateWorkerSecret({
 
 function isAuthFailure(error) {
   const text = `${error?.message || ""}\n${error?.stderr || ""}\n${error?.stdout || ""}`;
-  return /access token not provided|supabase login|not logged in|not authenticated|login required|unauthorized|auth token|expired|loggedIn"?\s*:\s*false/i.test(text);
+  return /access token not provided|supabase login|not logged in|not authenticated|login required|unauthorized|auth token|expired|CLOUDFLARE_API_TOKEN|non-interactive[^\n]*(?:token|login)|loggedIn"?\s*:\s*false/i.test(text);
 }
 
 function randomHex(byteLength, randomBytes = crypto.randomBytes) {
