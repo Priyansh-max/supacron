@@ -115,13 +115,13 @@ begin
   end if;
 
   update supacron.heartbeat
-  set active_secret_hash = pg_catalog.coalesce(
+  set active_secret_hash = coalesce(
         active_secret_hash,
         legacy_secret_hash,
         '${secretHash}'
       ),
       pending_secret_hash = case
-        when pg_catalog.coalesce(active_secret_hash, legacy_secret_hash, '${secretHash}') = '${secretHash}'
+        when coalesce(active_secret_hash, legacy_secret_hash, '${secretHash}') = '${secretHash}'
           then null
         else '${secretHash}'
       end

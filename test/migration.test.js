@@ -39,6 +39,8 @@ test("migration keeps an active and pending digest for interruption-safe handove
   assert.match(sql, new RegExp(`else '${secretHash}'`));
   assert.match(sql, /when pending_secret_hash = secret_digest then secret_digest/);
   assert.match(sql, /when pending_secret_hash = secret_digest then null/);
+  assert.doesNotMatch(sql, /pg_catalog\.coalesce/);
+  assert.match(sql, /coalesce\(active_secret_hash, legacy_secret_hash/);
 });
 
 test("repair rotation SQL requires existing objects and preserves the active digest", () => {
