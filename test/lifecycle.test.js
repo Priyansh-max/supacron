@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { repair, status, uninstall } from "../src/lifecycle.js";
+import { SupabaseAuthRequiredError } from "../src/supabase/client.js";
 
 const MANIFEST = {
   schemaVersion: 1,
@@ -106,42 +107,73 @@ test("status requires an existing non-secret manifest", async () => {
 });
 
 
-test("repair redeploys the final Worker config from the saved manifest", async () => {
+test("repair performs a verified heartbeat secret handover without exposing the secret", async () => {
   const output = createOutput();
   const calls = [];
+  const clearSecret = Buffer.alloc(32, "r").toString("hex");
 
   const report = await repair(["--project-ref", "abcdefghijklmnopqrst", "--approve-redeploy"], {
     out: output,
+    randomBytes: (length) => Buffer.alloc(length, "r"),
     readInstallManifest: async () => MANIFEST,
+    createLocalSetupWorkspace: async () => "C:\\Temp\\supacron-repair",
+    cleanupLocalSetupFiles: async ({ workspaceDir }) => calls.push(["cleanup", workspaceDir]),
+    listSupabaseProjects: async () => calls.push(["list-projects"]),
+    linkSupabaseProject: async ({ projectRef }) => calls.push(["link", projectRef]),
     verifyDbStructure: ({ projectRef }) => {
       calls.push(["structure", projectRef]);
       return { ok: true, heartbeatTable: true, pingFunction: true, heartbeatPolicy: true };
     },
-    deployWorker: (request) => calls.push(["deploy", request]),
+    executeSql: async (request) => calls.push(["sql", request]),
+    putWorkerSecret: async ({ key, value }) => calls.push(["put", key, value]),
+    deleteWorkerSecret: async ({ key }) => calls.push(["delete", key]),
+    deployWorker: async (request) => {
+      calls.push(["deploy", request.verification, request.declareSecrets]);
+      return request.verification
+        ? { workersDevUrl: "https://supacron-abcdefghijklmnopqrst.example.workers.dev" }
+        : {};
+    },
+    verifyWorker: async ({ verifySecret }) => {
+      calls.push(["verify-worker", verifySecret]);
+      return { ok: true, lastPingAt: "2026-09-14T15:02:00.000Z", pingCount: 4 };
+    },
+    verifyDbHeartbeat: () => ({
+      ok: true,
+      lastPingAt: "2026-09-14T15:02:00.000Z",
+      pingCount: 4,
+    }),
   });
 
   assert.equal(report.ok, true);
-  assert.equal(calls[0][0], "structure");
-  assert.deepEqual(calls[1], [
-    "deploy",
-    {
-      accountId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      workerName: "supacron-abcdefghijklmnopqrst",
-      schedule: "0 0,12 * * *",
-      verification: false,
-      declareSecrets: true,
-    },
+  const sqlCall = calls.find((call) => call[0] === "sql");
+  assert.equal(sqlCall[1].operation, "Supacron heartbeat secret rotation");
+  assert.match(sqlCall[1].sql, /active_secret_hash/);
+  assert.match(sqlCall[1].sql, /pending_secret_hash/);
+  assert.doesNotMatch(sqlCall[1].sql, new RegExp(clearSecret));
+  assert.deepEqual(calls.filter((call) => call[0] === "put").map((call) => call[1]), [
+    "SUPACRON_HEARTBEAT_SECRET",
+    "SUPACRON_VERIFY_SECRET",
   ]);
+  assert.deepEqual(calls.filter((call) => call[0] === "deploy"), [
+    ["deploy", true, true],
+    ["deploy", false, true],
+  ]);
+  assert.deepEqual(calls.at(-1), ["cleanup", "C:\\Temp\\supacron-repair"]);
   assert.match(output.text(), /Supacron repair complete/);
-  assert.doesNotMatch(output.text(), /sb_publishable_/);
+  assert.match(output.text(), /rotated and verified/);
+  assert.doesNotMatch(output.text(), new RegExp(clearSecret));
 });
 
-test("repair refuses to recreate missing Supabase objects without a stored secret", async () => {
+test("repair refuses to rotate when Supabase heartbeat objects are missing", async () => {
   await assert.rejects(
     () =>
       repair(["--project-ref", "abcdefghijklmnopqrst", "--approve-redeploy"], {
         out: createOutput(),
         readInstallManifest: async () => MANIFEST,
+        createLocalSetupWorkspace: async () => "C:\\Temp\\supacron-repair",
+        cleanupLocalSetupFiles: async () => {},
+        listSupabaseProjects: async () => [],
+        linkSupabaseProject: async () => {},
         verifyDbStructure: () => ({
           ok: false,
           heartbeatTable: false,
@@ -149,29 +181,134 @@ test("repair refuses to recreate missing Supabase objects without a stored secre
           heartbeatPolicy: false,
         }),
       }),
-    /fresh heartbeat secret/,
+    /heartbeat objects are missing/,
   );
 });
 
-test("repair asks before redeploying Cloudflare", async () => {
+test("repair asks before changing Supabase or Cloudflare", async () => {
+  const calls = [];
   await assert.rejects(
     () =>
       repair(["--project-ref", "abcdefghijklmnopqrst"], {
         out: createOutput(),
         rl: createRl(["no"]),
         readInstallManifest: async () => MANIFEST,
+        createLocalSetupWorkspace: async () => "C:\\Temp\\supacron-repair",
+        cleanupLocalSetupFiles: async () => {},
+        listSupabaseProjects: async () => [],
+        linkSupabaseProject: async () => {},
         verifyDbStructure: () => ({
           ok: true,
           heartbeatTable: true,
           pingFunction: true,
           heartbeatPolicy: true,
         }),
-        deployWorker: () => {
-          throw new Error("should not deploy");
-        },
+        executeSql: () => calls.push("sql"),
+        deployWorker: () => calls.push("deploy"),
       }),
-    /stopped before redeploying/,
+    /stopped before changing Supabase or Cloudflare/,
   );
+  assert.deepEqual(calls, []);
+});
+
+test("repair restores scheduled-only mode when live verification fails", async () => {
+  const calls = [];
+
+  await assert.rejects(
+    () => repair(["--project-ref", "abcdefghijklmnopqrst", "--approve-redeploy"], {
+      out: createOutput(),
+      randomBytes: (length) => Buffer.alloc(length, "s"),
+      readInstallManifest: async () => MANIFEST,
+      createLocalSetupWorkspace: async () => "C:\\Temp\\supacron-repair",
+      cleanupLocalSetupFiles: async () => {},
+      listSupabaseProjects: async () => [],
+      linkSupabaseProject: async () => {},
+      verifyDbStructure: () => ({
+        ok: true,
+        heartbeatTable: true,
+        pingFunction: true,
+        heartbeatPolicy: true,
+      }),
+      executeSql: async () => {},
+      putWorkerSecret: async ({ key }) => calls.push(["put", key]),
+      deleteWorkerSecret: async ({ key }) => calls.push(["delete", key]),
+      deployWorker: async (request) => {
+        calls.push(["deploy", request.verification, request.declareSecrets]);
+        return request.verification
+          ? { workersDevUrl: "https://supacron-abcdefghijklmnopqrst.example.workers.dev" }
+          : {};
+      },
+      verifyWorker: async () => {
+        throw new Error("verification failed");
+      },
+    }),
+    /verification failed/,
+  );
+
+  assert.deepEqual(calls.filter((call) => call[0] === "deploy"), [
+    ["deploy", true, true],
+    ["deploy", false, true],
+  ]);
+  assert.ok(calls.some((call) =>
+    call[0] === "delete" && call[1] === "SUPACRON_VERIFY_SECRET"));
+});
+
+test("repair recovers official Supabase and Cloudflare logins", async () => {
+  const calls = [];
+  let projectListAttempts = 0;
+  let secretPutAttempts = 0;
+
+  const report = await repair(["--project-ref", "abcdefghijklmnopqrst", "--approve-redeploy"], {
+    out: createOutput(),
+    randomBytes: (length) => Buffer.alloc(length, "t"),
+    readInstallManifest: async () => MANIFEST,
+    createLocalSetupWorkspace: async () => "C:\\Temp\\supacron-repair",
+    cleanupLocalSetupFiles: async () => {},
+    listSupabaseProjects: async () => {
+      projectListAttempts += 1;
+      if (projectListAttempts === 1) {
+        throw new SupabaseAuthRequiredError();
+      }
+      return [];
+    },
+    loginSupabase: async () => calls.push("login-supabase"),
+    linkSupabaseProject: async () => {},
+    verifyDbStructure: () => ({
+      ok: true,
+      heartbeatTable: true,
+      pingFunction: true,
+      heartbeatPolicy: true,
+    }),
+    executeSql: async () => {},
+    putWorkerSecret: async () => {
+      secretPutAttempts += 1;
+      if (secretPutAttempts === 1) {
+        const error = new Error("Cloudflare secret write failed.");
+        error.stderr = '{"loggedIn":false}';
+        throw error;
+      }
+    },
+    loginCloudflare: async () => calls.push("login-cloudflare"),
+    deleteWorkerSecret: async () => {},
+    deployWorker: async (request) => request.verification
+      ? { workersDevUrl: "https://supacron-abcdefghijklmnopqrst.example.workers.dev" }
+      : {},
+    verifyWorker: async () => ({
+      ok: true,
+      lastPingAt: "2026-09-14T15:02:00.000Z",
+      pingCount: 4,
+    }),
+    verifyDbHeartbeat: () => ({
+      ok: true,
+      lastPingAt: "2026-09-14T15:02:00.000Z",
+      pingCount: 4,
+    }),
+  });
+
+  assert.equal(report.ok, true);
+  assert.deepEqual(calls, ["login-supabase", "login-cloudflare"]);
+  assert.equal(projectListAttempts, 2);
+  assert.equal(secretPutAttempts, 3);
 });
 
 test("uninstall deletes Worker, runs scoped SQL, and removes the manifest after approval", async () => {
@@ -181,8 +318,22 @@ test("uninstall deletes Worker, runs scoped SQL, and removes the manifest after 
   const report = await uninstall(["--project-ref", "abcdefghijklmnopqrst", "--approve-uninstall"], {
     out: output,
     readInstallManifest: async () => MANIFEST,
+    createLocalSetupWorkspace: async () => calls.push(["workspace"]) && "C:\\Temp\\supacron-uninstall",
+    cleanupLocalSetupFiles: async ({ workspaceDir }) => calls.push(["cleanup", workspaceDir]),
+    listSupabaseProjects: async () => calls.push(["list-projects"]),
+    linkSupabaseProject: async ({ projectRef }) => calls.push(["link", projectRef]),
     deleteWorker: async (request) => calls.push(["delete-worker", request]),
     executeSql: async (request) => calls.push(["sql", request]),
+    verifyDbUninstalled: async ({ projectRef }) => {
+      calls.push(["verify-uninstalled", projectRef]);
+      return {
+        ok: true,
+        supacronSchema: false,
+        heartbeatTable: false,
+        pingFunction: false,
+        heartbeatPolicy: false,
+      };
+    },
     deleteInstallManifest: async (projectRef) => {
       calls.push(["manifest", projectRef]);
       return true;
@@ -190,19 +341,22 @@ test("uninstall deletes Worker, runs scoped SQL, and removes the manifest after 
   });
 
   assert.equal(report.ok, true);
-  assert.equal(calls[0][0], "delete-worker");
-  assert.deepEqual(calls[0][1], {
+  assert.equal(calls[3][0], "delete-worker");
+  assert.deepEqual(calls[3][1], {
     accountId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     workerName: "supacron-abcdefghijklmnopqrst",
   });
-  assert.equal(calls[1][0], "sql");
-  assert.equal(calls[1][1].projectRef, "abcdefghijklmnopqrst");
-  assert.equal(calls[1][1].operation, "Supacron database uninstall");
-  assert.match(calls[1][1].sql, /drop function if exists public\.supacron_ping\(text\)/i);
-  assert.match(calls[1][1].sql, /drop table if exists supacron\.heartbeat/i);
-  assert.doesNotMatch(calls[1][1].sql, /cascade/i);
-  assert.deepEqual(calls[2], ["manifest", "abcdefghijklmnopqrst"]);
+  assert.equal(calls[4][0], "sql");
+  assert.equal(calls[4][1].projectRef, "abcdefghijklmnopqrst");
+  assert.equal(calls[4][1].operation, "Supacron database uninstall");
+  assert.match(calls[4][1].sql, /drop function if exists public\.supacron_ping\(text\)/i);
+  assert.match(calls[4][1].sql, /drop table if exists supacron\.heartbeat/i);
+  assert.doesNotMatch(calls[4][1].sql, /cascade/i);
+  assert.deepEqual(calls[5], ["verify-uninstalled", "abcdefghijklmnopqrst"]);
+  assert.deepEqual(calls[6], ["manifest", "abcdefghijklmnopqrst"]);
+  assert.deepEqual(calls[7], ["cleanup", "C:\\Temp\\supacron-uninstall"]);
   assert.match(output.text(), /Supacron uninstall complete/);
+  assert.match(output.text(), /schema, heartbeat table, RPC, and policy/);
   assert.doesNotMatch(output.text(), /sb_publishable_/);
 });
 
@@ -242,6 +396,10 @@ test("uninstall stops before database changes when Worker deletion fails", async
       uninstall(["--project-ref", "abcdefghijklmnopqrst", "--approve-uninstall"], {
         out: createOutput(),
         readInstallManifest: async () => MANIFEST,
+        createLocalSetupWorkspace: async () => "C:\\Temp\\supacron-uninstall",
+        cleanupLocalSetupFiles: async () => calls.push("cleanup"),
+        listSupabaseProjects: async () => calls.push("list"),
+        linkSupabaseProject: async () => calls.push("link"),
         deleteWorker: async () => {
           calls.push("worker");
           throw new Error("worker delete failed");
@@ -252,7 +410,118 @@ test("uninstall stops before database changes when Worker deletion fails", async
     /worker delete failed/,
   );
 
-  assert.deepEqual(calls, ["worker"]);
+  assert.deepEqual(calls, ["list", "link", "worker", "cleanup"]);
+});
+
+test("uninstall safely resumes when the Worker was already deleted", async () => {
+  const calls = [];
+  const report = await uninstall(
+    ["--project-ref", "abcdefghijklmnopqrst", "--approve-uninstall"],
+    {
+      out: createOutput(),
+      readInstallManifest: async () => MANIFEST,
+      createLocalSetupWorkspace: async () => "C:\\Temp\\supacron-uninstall",
+      cleanupLocalSetupFiles: async () => calls.push("cleanup"),
+      listSupabaseProjects: async () => [],
+      linkSupabaseProject: async () => {},
+      deleteWorker: async () => {
+        const error = new Error("Cloudflare Worker delete failed");
+        error.stderr = "workers.api.error.script_not_found [code: 10090]";
+        throw error;
+      },
+      executeSql: async () => calls.push("sql"),
+      verifyDbUninstalled: async () => ({
+        ok: true,
+        supacronSchema: false,
+        heartbeatTable: false,
+        pingFunction: false,
+        heartbeatPolicy: false,
+      }),
+      deleteInstallManifest: async () => calls.push("manifest") || true,
+    },
+  );
+
+  assert.equal(report.ok, true);
+  assert.deepEqual(report.worker, { deleted: false, alreadyMissing: true });
+  assert.deepEqual(calls, ["sql", "manifest", "cleanup"]);
+});
+
+test("uninstall keeps the manifest when database cleanup cannot be verified", async () => {
+  const calls = [];
+  await assert.rejects(
+    () => uninstall(
+      ["--project-ref", "abcdefghijklmnopqrst", "--approve-uninstall"],
+      {
+        out: createOutput(),
+        readInstallManifest: async () => MANIFEST,
+        createLocalSetupWorkspace: async () => "C:\\Temp\\supacron-uninstall",
+        cleanupLocalSetupFiles: async () => calls.push("cleanup"),
+        listSupabaseProjects: async () => [],
+        linkSupabaseProject: async () => {},
+        deleteWorker: async () => calls.push("worker"),
+        executeSql: async () => calls.push("sql"),
+        verifyDbUninstalled: async () => ({
+          ok: false,
+          supacronSchema: true,
+          heartbeatTable: false,
+          pingFunction: false,
+          heartbeatPolicy: false,
+        }),
+        deleteInstallManifest: async () => calls.push("manifest"),
+      },
+    ),
+    /local manifest was kept/,
+  );
+
+  assert.deepEqual(calls, ["worker", "sql", "cleanup"]);
+});
+
+test("uninstall recovers official Supabase and Cloudflare logins", async () => {
+  const calls = [];
+  let projectListAttempts = 0;
+  let workerDeleteAttempts = 0;
+
+  const report = await uninstall(
+    ["--project-ref", "abcdefghijklmnopqrst", "--approve-uninstall"],
+    {
+      out: createOutput(),
+      readInstallManifest: async () => MANIFEST,
+      createLocalSetupWorkspace: async () => "C:\\Temp\\supacron-uninstall",
+      cleanupLocalSetupFiles: async () => {},
+      listSupabaseProjects: async () => {
+        projectListAttempts += 1;
+        if (projectListAttempts === 1) {
+          throw new SupabaseAuthRequiredError();
+        }
+        return [];
+      },
+      loginSupabase: async () => calls.push("login-supabase"),
+      linkSupabaseProject: async () => {},
+      deleteWorker: async () => {
+        workerDeleteAttempts += 1;
+        if (workerDeleteAttempts === 1) {
+          const error = new Error("Cloudflare Worker delete failed");
+          error.stderr = '{"loggedIn":false}';
+          throw error;
+        }
+      },
+      loginCloudflare: async () => calls.push("login-cloudflare"),
+      executeSql: async () => {},
+      verifyDbUninstalled: async () => ({
+        ok: true,
+        supacronSchema: false,
+        heartbeatTable: false,
+        pingFunction: false,
+        heartbeatPolicy: false,
+      }),
+      deleteInstallManifest: async () => true,
+    },
+  );
+
+  assert.equal(report.ok, true);
+  assert.deepEqual(calls, ["login-supabase", "login-cloudflare"]);
+  assert.equal(projectListAttempts, 2);
+  assert.equal(workerDeleteAttempts, 2);
 });
 
 function createRl(answers) {

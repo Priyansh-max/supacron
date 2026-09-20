@@ -73,7 +73,7 @@ The installer walks through:
 - Supabase object verification.
 - Cloudflare login through Wrangler, if needed.
 - Cloudflare account selection.
-- Cron schedule selection.
+- Heartbeat frequency selection: once, twice, or three times daily.
 - Worker deployment with secrets streamed through Wrangler stdin.
 - One temporary live test to prove the heartbeat works.
 - Removal of temporary test access.
@@ -111,11 +111,17 @@ Locally:
 npx supacron init       # guided setup
 npx supacron test       # live heartbeat proof
 npx supacron status     # check saved install receipt and Supabase objects
-npx supacron repair     # redeploy the final private Worker from the receipt
+npx supacron repair     # safely rotate the heartbeat secret and restore the Worker
 npx supacron uninstall  # remove Supacron-owned resources after approval
 npx supacron logout     # sign out of Supabase CLI and Cloudflare Wrangler
 npx supacron help       # show all commands
 ```
+
+`uninstall` deletes the named Cloudflare Worker and its attached resources,
+then transactionally removes only `public.supacron_ping(text)`,
+`supacron.heartbeat`, and the empty `supacron` schema. It verifies those
+database objects are absent before deleting the local receipt. If cleanup is
+interrupted, rerun the command; an already-missing Worker is handled safely.
 
 `logout` is useful when you chose to remember CLI sessions during setup and later want to sign out without running setup again.
 ## Proof Command
@@ -151,7 +157,15 @@ Rerunning setup for the same Supabase project uses the same default Worker name:
 supacron-<project-ref>
 ```
 
-That means choosing a new schedule updates the existing Worker instead of creating a second default Worker.
+That means choosing a new frequency updates the existing Worker instead of creating a second default Worker.
+
+Available frequencies are intentionally limited:
+
+- Once daily at `00:00 UTC`.
+- Twice daily at `00:00` and `12:00 UTC` (recommended).
+- Three times daily at `00:00`, `08:00`, and `16:00 UTC`.
+
+Custom, hourly, and every-15-minute schedules are not offered.
 
 ## Setup Modes
 
@@ -192,6 +206,8 @@ CLI sessions are owned by the official provider CLIs and live outside your proje
 Supacron never asks for database passwords, connection strings, service-role keys, Supabase access tokens, or Cloudflare API tokens.
 
 The heartbeat secret is generated locally in memory. Supacron stores only a SHA-256 digest in Supabase SQL and streams the clear value to Wrangler over stdin so Cloudflare stores it as a Worker secret. The clear heartbeat secret is not written to command arguments, generated files, local storage, or logs.
+
+The secret has no expiry timer. During setup or repair, Supabase keeps the current digest active while a new digest is pending. The pending digest is promoted only after the updated Worker sends a successful heartbeat. If setup is interrupted, Supacron attempts to restore the private scheduled Worker and the previously active secret remains valid.
 
 The final Worker has no public HTTP handler. During setup and `test`, Supacron briefly deploys a secret-protected test route, calls it once, removes its temporary secret, and restores the final scheduled-only Worker.
 

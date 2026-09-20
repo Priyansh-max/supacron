@@ -107,7 +107,7 @@ test("init defaults to automatic guided setup and runs shown SQL only after expl
     nodeVersion: "22.16.0",
     now: "2026-09-14T15:00:00.000Z",
     out: output,
-    rl: createRl(["1", "", "1", "*/15 * * * *", "", ""]),
+    rl: createRl(["1", "", "1", "2", ""]),
     randomBytes: (length) => Buffer.alloc(length, "b"),
     listSupabaseProjects: () => [PROJECT],
     linkSupabaseProject: ({ projectRef }) => calls.push(["link-project", projectRef]),
@@ -163,13 +163,13 @@ test("init rejects invalid schedule flags before Cloudflare deployment", async (
         return {};
       },
     }),
-    /Invalid cron schedule/,
+    /Invalid heartbeat frequency/,
   );
 
   assert.equal(deployed, false);
 });
 
-test("init custom schedule retries invalid cron before showing Cloudflare plan", async () => {
+test("init offers only the three supported daily frequencies", async () => {
   const deploys = [];
   const output = createOutput();
 
@@ -177,7 +177,7 @@ test("init custom schedule retries invalid cron before showing Cloudflare plan",
     nodeVersion: "22.16.0",
     now: "2026-09-14T15:00:00.000Z",
     out: output,
-    rl: createRl(["1", "1", "4", "Y", "*/15 * * * *", "", ""]),
+    rl: createRl(["1", "1", "2", ""]),
     randomBytes: (length) => Buffer.alloc(length, "e"),
     listSupabaseProjects: () => [PROJECT],
     linkSupabaseProject: () => {},
@@ -201,10 +201,12 @@ test("init custom schedule retries invalid cron before showing Cloudflare plan",
     writeInstallManifest: async () => "C:\\Temp\\supacron-manifest.json",
   });
 
-  assert.equal(result.schedule, "*/15 * * * *");
-  assert.deepEqual([...new Set(deploys)], ["*/15 * * * *"]);
-  assert.match(output.text(), /That cron expression is not valid/);
-  assert.match(output.text(), /Schedule\s+\*\/15 \* \* \* \*/);
+  assert.equal(result.schedule, "0 0,8,16 * * *");
+  assert.deepEqual([...new Set(deploys)], ["0 0,8,16 * * *"]);
+  assert.match(output.text(), /Twice daily/);
+  assert.match(output.text(), /Three times daily/);
+  assert.match(output.text(), /Once daily/);
+  assert.doesNotMatch(output.text(), /Custom cron|Hourly|15 minutes/);
 });
 test("init removes its temporary setup workspace and can logout official CLIs", async () => {
   const calls = [];
@@ -286,7 +288,7 @@ test("discoverSupabaseProjects uses official login recovery", async () => {
   assert.match(output.text(), /official Supabase CLI login/);
 });
 
-test("deployCloudflareCron cleans temporary verification secret on verification failure", async () => {
+test("deployCloudflareCron cleans temporary access and restores scheduled mode after verification failure", async () => {
   const calls = [];
 
   await assert.rejects(
@@ -302,10 +304,12 @@ test("deployCloudflareCron cleans temporary verification secret on verification 
         verifyDbStructure: () => ({ ok: true, heartbeatTable: true, pingFunction: true, heartbeatPolicy: true }),
         listPublishableKeys: () => ["sb_publishable_abcdefghijklmnopqrstuvwxyz"],
         listCloudflareAccounts: () => [ACCOUNT],
-        deployWorker: (request) =>
-          request.verification
+        deployWorker: (request) => {
+          calls.push(["deploy", request.verification, request.declareSecrets]);
+          return request.verification
             ? { workersDevUrl: "https://supacron-abcdefghijklmnopqrst.example.workers.dev" }
-            : {},
+            : {};
+        },
         putWorkerSecret: (request) => calls.push(["put", request.key]),
         deleteWorkerSecret: (request) => calls.push(["delete", request.key]),
         verifyWorker: async () => {
@@ -315,7 +319,13 @@ test("deployCloudflareCron cleans temporary verification secret on verification 
     /nope/,
   );
 
-  assert.deepEqual(calls.at(-1), ["delete", "SUPACRON_VERIFY_SECRET"]);
+  assert.ok(calls.some((call) =>
+    call[0] === "delete" && call[1] === "SUPACRON_VERIFY_SECRET"));
+  assert.deepEqual(calls.filter((call) => call[0] === "deploy"), [
+    ["deploy", true, false],
+    ["deploy", true, true],
+    ["deploy", false, true],
+  ]);
 });
 
 function createOutput() {

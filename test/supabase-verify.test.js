@@ -4,10 +4,13 @@ import assert from "node:assert/strict";
 import {
   createHeartbeatVerificationSql,
   createStructureVerificationSql,
+  createUninstallVerificationSql,
   parseHeartbeatVerificationJson,
   parseStructureVerificationJson,
+  parseUninstallVerificationJson,
   verifyHeartbeat,
   verifyStructure,
+  verifyUninstalled,
 } from "../src/supabase/verify.js";
 
 test("structure verification SQL checks only Supacron-owned objects", () => {
@@ -169,6 +172,45 @@ test("parseHeartbeatVerificationJson rejects invalid heartbeat timestamps", () =
     },
   );
 });
+
+test("uninstall verification checks every Supacron-owned database object", () => {
+  const sql = createUninstallVerificationSql();
+
+  assert.match(sql, /pg_namespace/);
+  assert.match(sql, /supacron\.heartbeat/);
+  assert.match(sql, /public\.supacron_ping\(text\)/);
+  assert.match(sql, /pg_policies/);
+  assert.doesNotMatch(sql, /drop|alter|create|insert|update|delete/i);
+});
+
+test("parseUninstallVerificationJson succeeds only when all objects are absent", () => {
+  assert.deepEqual(
+    parseUninstallVerificationJson(JSON.stringify([{
+      supacron_schema_exists: false,
+      heartbeat_table_exists: "f",
+      ping_function_exists: 0,
+      heartbeat_policy_exists: false,
+    }])),
+    {
+      supacronSchema: false,
+      heartbeatTable: false,
+      pingFunction: false,
+      heartbeatPolicy: false,
+      ok: true,
+    },
+  );
+
+  assert.equal(
+    parseUninstallVerificationJson(JSON.stringify([{
+      supacron_schema_exists: true,
+      heartbeat_table_exists: false,
+      ping_function_exists: false,
+      heartbeat_policy_exists: false,
+    }])).ok,
+    false,
+  );
+});
+
 test("verify helpers execute the expected SQL against the selected project", () => {
   const calls = [];
   const execute = (request) => {
@@ -181,6 +223,13 @@ test("verify helpers execute the expected SQL against the selected project", () 
               ping_function_exists: true,
               heartbeat_policy_exists: true,
             }
+          : request.operation.includes("uninstall")
+            ? {
+                supacron_schema_exists: false,
+                heartbeat_table_exists: false,
+                ping_function_exists: false,
+                heartbeat_policy_exists: false,
+              }
           : {
               source: "cloudflare-cron",
               last_ping_at: "2026-09-14T15:12:00.000Z",
@@ -192,7 +241,9 @@ test("verify helpers execute the expected SQL against the selected project", () 
 
   assert.equal(verifyStructure({ projectRef: "abcdefghijklmnopqrst", execute }).ok, true);
   assert.equal(verifyHeartbeat({ projectRef: "abcdefghijklmnopqrst", execute }).ok, true);
+  assert.equal(verifyUninstalled({ projectRef: "abcdefghijklmnopqrst", execute }).ok, true);
   assert.equal(calls[0].projectRef, "abcdefghijklmnopqrst");
   assert.match(calls[0].sql, /information_schema/);
   assert.match(calls[1].sql, /supacron\.heartbeat/);
+  assert.match(calls[2].sql, /pg_namespace/);
 });

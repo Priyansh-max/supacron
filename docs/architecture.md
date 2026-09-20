@@ -82,9 +82,16 @@ CLIs. Supacron may handle the selected project's URL and publishable key; these
 are not secret credentials and are disclosed in the permission summary.
 
 Supacron generates a high-entropy heartbeat secret in memory. The database
-migration contains only its SHA-256 digest. The clear secret is streamed to
-Wrangler over standard input and stored as a Cloudflare secret. It is never
-placed in command arguments, generated files, the manifest, or logs.
+migration contains only SHA-256 digests. One digest is active and one may be
+pending during a handover. The clear secret is streamed to Wrangler over
+standard input and stored as a Cloudflare secret. It is never placed in command
+arguments, generated files, the manifest, or logs.
+
+Secret handover is interruption-safe. Supabase accepts the active digest while
+the replacement is pending. A successful heartbeat using the pending secret
+atomically promotes it and clears the pending digest. A failed provider step
+therefore leaves the previously working secret valid instead of stranding the
+Worker and database with different values.
 
 ## Database ownership
 
@@ -148,9 +155,15 @@ not overwritten without a repair-specific confirmation.
 Each phase records its completion. On failure, Supacron reports what succeeded,
 what failed, and the exact safe next action. It does not silently delete a
 verified database installation. A failed Cloudflare deployment can be retried
-with `repair`.
+with `repair`. Repair generates a fresh secret, prepares the pending digest,
+updates Cloudflare, proves a live heartbeat, and restores scheduled-only mode.
 
-`uninstall` shows the exact Worker and Supabase objects first. It removes the
-Worker through Wrangler, then gives the user reviewed SQL to remove only
-Supacron-owned database objects. Destructive steps require separate
-confirmation.
+`uninstall` shows the exact Worker and Supabase objects first. After separate
+confirmation, it verifies provider access, removes the Worker through Wrangler,
+runs non-`CASCADE` SQL for only `public.supacron_ping(text)`,
+`supacron.heartbeat`, and the `supacron` schema, then verifies every object is
+absent. The SQL is transactional: if the schema contains an unexpected object,
+the schema drop fails and the database cleanup rolls back instead of deleting
+it. The local receipt is removed only after both provider cleanups succeed.
+Retries treat an already-absent Worker as success, so an interrupted uninstall
+can safely finish the Supabase cleanup.

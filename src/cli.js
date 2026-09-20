@@ -63,7 +63,7 @@ Commands:
   setup      Alias for init.
   test       Run a live Worker heartbeat proof, then restore scheduled-only mode.
   status     Check the saved Supacron install receipt and Supabase heartbeat objects.
-  repair     Redeploy the final private Worker from the saved install receipt.
+  repair     Safely rotate a mismatched heartbeat secret and restore the private Worker.
   uninstall  Remove the Worker, Supacron-owned database objects, and local receipt after approval.
   logout     Sign out of both official CLI sessions: Supabase CLI and Cloudflare Wrangler.
   help       Show this command list.

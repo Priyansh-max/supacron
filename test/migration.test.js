@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createInstallationSql,
+  createSecretRotationSql,
   createUninstallSql,
   heartbeatSecretHash
 } from "../src/supabase/migration.js";
@@ -28,6 +29,29 @@ test("migration repairs Supacron-owned partial installs but rejects schema colli
   assert.match(sql, /create or replace function public\.supacron_ping/);
 });
 
+test("migration keeps an active and pending digest for interruption-safe handover", () => {
+  const secretHash = "c".repeat(64);
+  const sql = createInstallationSql({ secretHash });
+
+  assert.match(sql, /active_secret_hash text/);
+  assert.match(sql, /pending_secret_hash text/);
+  assert.match(sql, /pg_catalog\.regexp_match/);
+  assert.match(sql, new RegExp(`else '${secretHash}'`));
+  assert.match(sql, /when pending_secret_hash = secret_digest then secret_digest/);
+  assert.match(sql, /when pending_secret_hash = secret_digest then null/);
+});
+
+test("repair rotation SQL requires existing objects and preserves the active digest", () => {
+  const secretHash = "d".repeat(64);
+  const sql = createSecretRotationSql({ secretHash });
+
+  assert.match(sql, /heartbeat objects are missing/);
+  assert.match(sql, /active_secret_hash/);
+  assert.match(sql, /pending_secret_hash/);
+  assert.match(sql, new RegExp(secretHash));
+  assert.doesNotMatch(sql, /create table if not exists/);
+});
+
 test("security definer function uses qualified names and narrow grants", () => {
   const sql = createInstallationSql({ secretHash: "b".repeat(64) });
 
@@ -44,6 +68,10 @@ test("security definer function uses qualified names and narrow grants", () => {
 test("migration rejects malformed hashes and short secrets", () => {
   assert.throws(
     () => createInstallationSql({ secretHash: "not-a-hash" }),
+    /lowercase SHA-256/
+  );
+  assert.throws(
+    () => createSecretRotationSql({ secretHash: "not-a-hash" }),
     /lowercase SHA-256/
   );
   assert.throws(() => heartbeatSecretHash("short"), /at least 32/);

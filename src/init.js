@@ -61,22 +61,17 @@ const SCHEDULE_PRESETS = [
   {
     value: DEFAULT_SCHEDULE,
     label: "Twice daily (recommended)",
-    description: DEFAULT_SCHEDULE,
+    description: "Every 12 hours (00:00 and 12:00 UTC)",
   },
   {
-    value: "0 * * * *",
-    label: "Hourly",
-    description: "0 * * * *",
+    value: "0 0,8,16 * * *",
+    label: "Three times daily",
+    description: "Every 8 hours (00:00, 08:00, and 16:00 UTC)",
   },
   {
-    value: "*/15 * * * *",
-    label: "Every 15 minutes",
-    description: "*/15 * * * *",
-  },
-  {
-    value: "custom",
-    label: "Custom cron expression",
-    description: "Type your own 5-field cron schedule.",
+    value: "0 0 * * *",
+    label: "Once daily",
+    description: "Every 24 hours (00:00 UTC)",
   },
 ];
 
@@ -354,7 +349,7 @@ export async function deployCloudflareCron({
 
   section(out, "Cloudflare deployment");
   status(out, "info", "Preparing a temporary setup test...");
-  const bootstrap = deploy({
+  const bootstrap = await deploy({
     accountId: account.id,
     workerName,
     schedule,
@@ -364,6 +359,7 @@ export async function deployCloudflareCron({
   status(out, "success", "Temporary setup test ready.");
 
   let verificationSecretWritten = false;
+  let finalWorkerDeployed = false;
   try {
     status(out, "info", "Saving Worker secrets in Cloudflare...");
     for (const [key, value] of [
@@ -372,7 +368,7 @@ export async function deployCloudflareCron({
       ["SUPACRON_HEARTBEAT_SECRET", heartbeatSecret],
       ["SUPACRON_VERIFY_SECRET", verifySecret],
     ]) {
-      putSecret({
+      await putSecret({
         accountId: account.id,
         workerName,
         key,
@@ -385,7 +381,7 @@ export async function deployCloudflareCron({
     status(out, "success", "Worker secrets saved in Cloudflare.");
 
     status(out, "info", "Enabling temporary live test access...");
-    const verificationDeploy = deploy({
+    const verificationDeploy = await deploy({
       accountId: account.id,
       workerName,
       schedule,
@@ -403,7 +399,7 @@ export async function deployCloudflareCron({
     status(out, "success", "Live heartbeat confirmed.");
 
     status(out, "info", "Cleaning up temporary test access...");
-    removeSecret({
+    await removeSecret({
       accountId: account.id,
       workerName,
       key: "SUPACRON_VERIFY_SECRET",
@@ -412,13 +408,14 @@ export async function deployCloudflareCron({
     status(out, "success", "Temporary test access removed.");
 
     status(out, "info", "Switching Worker back to scheduled-only mode...");
-    deploy({
+    await deploy({
       accountId: account.id,
       workerName,
       schedule,
       verification: false,
       declareSecrets: true,
     });
+    finalWorkerDeployed = true;
     status(out, "success", "Worker is scheduled-only.");
 
     return {
@@ -429,13 +426,29 @@ export async function deployCloudflareCron({
   } finally {
     if (verificationSecretWritten) {
       try {
-        removeSecret({
+        await removeSecret({
           accountId: account.id,
           workerName,
           key: "SUPACRON_VERIFY_SECRET",
         });
       } catch {
         status(out, "warn", "Temporary test access cleanup failed. Remove SUPACRON_VERIFY_SECRET in Cloudflare.");
+      }
+    }
+
+    if (!finalWorkerDeployed) {
+      try {
+        status(out, "info", "Restoring scheduled-only mode after interrupted setup...");
+        await deploy({
+          accountId: account.id,
+          workerName,
+          schedule,
+          verification: false,
+          declareSecrets: true,
+        });
+        status(out, "success", "Existing scheduled Worker restored.");
+      } catch {
+        status(out, "warn", "Scheduled Worker restore failed. Rerun Supacron setup to complete recovery.");
       }
     }
   }
@@ -626,13 +639,13 @@ async function chooseSetupMode({ parsed, rl, out }) {
 
 async function chooseSchedule({ parsed, rl, out }) {
   if (parsed.values.schedule) {
-    return requireValidSchedule(parsed.values.schedule);
+    return requirePresetSchedule(parsed.values.schedule);
   }
 
-  const selected = await chooseFromList({
+  return chooseFromList({
     rl,
     out,
-    question: "Choose cron schedule",
+    question: "Choose heartbeat frequency",
     choices: SCHEDULE_PRESETS.map((entry) => ({
       value: entry.value,
       label: entry.label,
@@ -640,35 +653,14 @@ async function chooseSchedule({ parsed, rl, out }) {
       item: entry.value,
     })),
   });
-
-  if (selected !== "custom") {
-    return selected;
-  }
-
-  section(out, "Custom schedule");
-  write(out, muted(out, "  Enter 5 cron fields, for example: */15 * * * *"));
-  while (true) {
-    const answer = (await askClean(rl, out, "Cron expression: ")).trim();
-    try {
-      return requireValidSchedule(answer);
-    } catch {
-      status(out, "warn", "That cron expression is not valid. Use 5 fields, for example: 0 0,12 * * *");
-    }
-  }
 }
 
-function requireValidSchedule(value) {
-  if (typeof value !== "string" || !validCron(value.trim())) {
-    throw new Error("Invalid cron schedule. Choose a preset or provide a 5-field cron expression like 0 0,12 * * *.");
+function requirePresetSchedule(value) {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  if (!SCHEDULE_PRESETS.some((entry) => entry.value === normalized)) {
+    throw new Error("Invalid heartbeat frequency. Choose once, twice, or three times daily.");
   }
-  return value.trim();
-}
-
-function validCron(value) {
-  return typeof value === "string"
-    && value.length <= 100
-    && /^[0-9*/?, -]+$/.test(value)
-    && value.trim().split(/\s+/).length === 5;
+  return normalized;
 }
 
 function chooseWorkerName({ parsed, project }) {

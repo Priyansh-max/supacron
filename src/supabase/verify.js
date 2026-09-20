@@ -33,12 +33,33 @@ where last_source = 'cloudflare-cron'
 limit 1;
 `;
 
+const UNINSTALL_SQL = `
+select
+  exists (
+    select 1
+    from pg_namespace
+    where nspname = 'supacron'
+  ) as supacron_schema_exists,
+  to_regclass('supacron.heartbeat') is not null as heartbeat_table_exists,
+  to_regprocedure('public.supacron_ping(text)') is not null as ping_function_exists,
+  exists (
+    select 1
+    from pg_policies
+    where schemaname = 'supacron'
+      and tablename = 'heartbeat'
+  ) as heartbeat_policy_exists;
+`;
+
 export function createStructureVerificationSql() {
   return STRUCTURE_SQL.trim();
 }
 
 export function createHeartbeatVerificationSql() {
   return HEARTBEAT_SQL.trim();
+}
+
+export function createUninstallVerificationSql() {
+  return UNINSTALL_SQL.trim();
 }
 
 export function parseStructureVerificationJson(raw) {
@@ -82,6 +103,24 @@ export function parseHeartbeatVerificationJson(raw) {
   };
 }
 
+export function parseUninstallVerificationJson(raw) {
+  const row = firstRow(raw, "Supabase uninstall verification");
+  const result = {
+    supacronSchema: toBoolean(row.supacron_schema_exists),
+    heartbeatTable: toBoolean(row.heartbeat_table_exists),
+    pingFunction: toBoolean(row.ping_function_exists),
+    heartbeatPolicy: toBoolean(row.heartbeat_policy_exists),
+  };
+
+  return {
+    ...result,
+    ok: !result.supacronSchema
+      && !result.heartbeatTable
+      && !result.pingFunction
+      && !result.heartbeatPolicy,
+  };
+}
+
 function normalizeTimestamp(value) {
   if (typeof value !== "string" || value.trim() === "") {
     return null;
@@ -113,6 +152,16 @@ export function verifyHeartbeat({ projectRef, execute = executeProjectSql }) {
   });
 
   return parseHeartbeatVerificationJson(result.stdout);
+}
+
+export function verifyUninstalled({ projectRef, execute = executeProjectSql }) {
+  const result = execute({
+    projectRef,
+    sql: createUninstallVerificationSql(),
+    operation: "Supabase uninstall verification",
+  });
+
+  return parseUninstallVerificationJson(result.stdout);
 }
 
 function firstRow(raw, label) {
