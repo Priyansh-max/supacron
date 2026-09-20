@@ -29,7 +29,6 @@ Lifecycle commands are:
 ```text
 npx supacron status
 npx supacron repair
-npx supacron uninstall
 ```
 
 The guided `init` flow is:
@@ -158,12 +157,6 @@ verified database installation. A failed Cloudflare deployment can be retried
 with `repair`. Repair generates a fresh secret, prepares the pending digest,
 updates Cloudflare, proves a live heartbeat, and restores scheduled-only mode.
 
-`uninstall` shows the exact Worker and Supabase objects first. After separate
-confirmation, it verifies provider access, removes the Worker through Wrangler,
-runs non-`CASCADE` SQL for only `public.supacron_ping(text)`,
-`supacron.heartbeat`, and the `supacron` schema, then verifies every object is
-absent. The SQL is transactional: if the schema contains an unexpected object,
-the schema drop fails and the database cleanup rolls back instead of deleting
-it. The local receipt is removed only after both provider cleanups succeed.
-Retries treat an already-absent Worker as success, so an interrupted uninstall
-can safely finish the Supabase cleanup.
+Supacron intentionally has no automated uninstall command. Removing an
+installation is a manual provider operation so users can review and delete the
+Cloudflare Worker and Supabase objects with their own provider permissions.

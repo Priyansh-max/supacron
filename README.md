@@ -112,16 +112,14 @@ npx supacron init       # guided setup
 npx supacron test       # live heartbeat proof
 npx supacron status     # check saved install receipt and Supabase objects
 npx supacron repair     # safely rotate the heartbeat secret and restore the Worker
-npx supacron uninstall  # remove Supacron-owned resources after approval
 npx supacron logout     # sign out of Supabase CLI and Cloudflare Wrangler
 npx supacron help       # show all commands
 ```
 
-`uninstall` deletes the named Cloudflare Worker and its attached resources,
-then transactionally removes only `public.supacron_ping(text)`,
-`supacron.heartbeat`, and the empty `supacron` schema. It verifies those
-database objects are absent before deleting the local receipt. If cleanup is
-interrupted, rerun the command; an already-missing Worker is handled safely.
+Supacron intentionally does not provide an automated uninstall command.
+Delete the Cloudflare Worker and Supabase objects manually in their provider
+dashboards when you want to remove an installation. This avoids requiring
+provider-wide deletion permissions from the CLI.
 
 `logout` is useful when you chose to remember CLI sessions during setup and later want to sign out without running setup again.
 ## Proof Command

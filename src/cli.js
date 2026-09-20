@@ -3,7 +3,7 @@
 import { init } from "./init.js";
 import { createIssueUrl, formatIssueLink } from "./issue.js";
 import { logoutSessions } from "./logout.js";
-import { repair, status, uninstall } from "./lifecycle.js";
+import { repair, status } from "./lifecycle.js";
 import { testInstallation } from "./test.js";
 
 const command = process.argv[2] ?? "help";
@@ -18,8 +18,6 @@ try {
     await repair(args);
   } else if (command === "test") {
     await testInstallation(args);
-  } else if (command === "uninstall") {
-    await uninstall(args);
   } else if (command === "logout") {
     await logoutSessions(args);
   } else if (command === "help" || command === "--help" || command === "-h") {
@@ -49,7 +47,6 @@ Usage:
   npx supacron test
   npx supacron status
   npx supacron repair
-  npx supacron uninstall
   npx supacron logout
   npx supacron help
 
@@ -64,7 +61,6 @@ Commands:
   test       Run a live Worker heartbeat proof, then restore scheduled-only mode.
   status     Check the saved Supacron install receipt and Supabase heartbeat objects.
   repair     Safely rotate a mismatched heartbeat secret and restore the private Worker.
-  uninstall  Remove the Worker, Supacron-owned database objects, and local receipt after approval.
   logout     Sign out of both official CLI sessions: Supabase CLI and Cloudflare Wrangler.
   help       Show this command list.
 

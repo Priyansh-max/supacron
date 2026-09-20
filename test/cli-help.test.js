@@ -15,7 +15,7 @@ test("CLI help lists every public command", () => {
   assert.match(result.stdout, /npx supacron test/);
   assert.match(result.stdout, /npx supacron status/);
   assert.match(result.stdout, /npx supacron repair/);
-  assert.match(result.stdout, /npx supacron uninstall/);
+  assert.doesNotMatch(result.stdout, /npx supacron uninstall/);
   assert.match(result.stdout, /npx supacron logout/);
   assert.match(result.stdout, /npx supacron help/);
   assert.match(result.stdout, /logout\s+Sign out of both official CLI sessions/);
