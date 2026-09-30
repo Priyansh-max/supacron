@@ -1,7 +1,7 @@
 {
   "name": "supacron",
   "version": "0.1.2",
-  "description": "Set up a transparent Supabase heartbeat with Cloudflare Workers Cron.",
+  "description": "Help prevent Supabase projects from pausing with a private Cloudflare Cron heartbeat.",
   "type": "module",
   "bin": {
     "supacron": "src/cli.js"
@@ -15,9 +15,15 @@
   },
   "keywords": [
     "supabase",
+    "supabase cron",
+    "supabase heartbeat",
+    "supabase keep alive",
+    "supabase pause",
+    "supabase inactivity",
     "cron",
     "heartbeat",
-    "cloudflare"
+    "cloudflare",
+    "cloudflare workers"
   ],
   "license": "MIT",
   "engines": {

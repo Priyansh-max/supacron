@@ -2,9 +2,9 @@
 
 <h1>Supacron</h1>
 
-<h3>Cloudflare Workers Cron -> Supabase heartbeat, installed from your terminal.</h3>
+<h3>Help prevent Supabase free projects from pausing due to inactivity.</h3>
 
-<p><em>Private cron. Visible proof. No service-role keys, database passwords, connection strings, Supabase access tokens, or Cloudflare API tokens.</em></p>
+<p><em>Supacron installs a private Cloudflare Cron heartbeat for Supabase in under two minutes, with visible proof and no service-role keys, database passwords, connection strings, Supabase access tokens, or Cloudflare API tokens.</em></p>
 
 <br />
 
@@ -13,7 +13,7 @@
 <br />
 <br />
 
-<img alt="version 0.1.1" src="https://img.shields.io/badge/version-0.1.1-64D80D?style=flat-square&labelColor=111827" />
+<img alt="version 0.1.2" src="https://img.shields.io/badge/version-0.1.2-64D80D?style=flat-square&labelColor=111827" />
 <img alt="license MIT" src="https://img.shields.io/badge/license-MIT-64D80D?style=flat-square&labelColor=111827" />
 <img alt="runtime Node 20+" src="https://img.shields.io/badge/runtime-Node_20+-64D80D?style=flat-square&labelColor=111827" />
 
@@ -27,6 +27,8 @@
 </div>
 
 ## Quick Start
+
+Keep a Supabase project active with a real database heartbeat:
 
 Run the guided installer:
 
@@ -54,7 +56,9 @@ npx supacron help
 
 ## What Supacron Does
 
-Supacron installs a small scheduled Cloudflare Worker that calls a protected Supabase RPC on a cron schedule. Supabase stores the latest heartbeat timestamp and ping count, so you can verify that the scheduled Worker is actually running.
+Supacron helps keep low-traffic Supabase projects from being paused for inactivity by creating a real database heartbeat. It installs a small scheduled Cloudflare Worker that calls a protected Supabase RPC on a cron schedule. Supabase stores the latest heartbeat timestamp and ping count, so you can verify that the scheduled Worker is actually running.
+
+If you are searching for how to stop Supabase projects from pausing, keep a Supabase free project alive, or add a Supabase inactivity cron job, Supacron is the one-command setup for that workflow.
 
 ```txt
 Cloudflare Cron Trigger -> scheduled Worker -> Supabase RPC -> supacron.heartbeat
