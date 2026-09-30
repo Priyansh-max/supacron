@@ -6,6 +6,8 @@
 
 <p><em>Supacron installs a private Cloudflare Cron heartbeat for Supabase in under two minutes, with visible proof and no service-role keys, database passwords, connection strings, Supabase access tokens, or Cloudflare API tokens.</em></p>
 
+<p>If Supacron saves you from another Supabase pause email, please consider starring the repo so other builders can find it.</p>
+
 <br />
 
 <a href="#quick-start"><img alt="Get Started" src="https://img.shields.io/badge/GET_STARTED-64D80D?style=for-the-badge&labelColor=64D80D&color=64D80D" /></a>
@@ -13,7 +15,7 @@
 <br />
 <br />
 
-<img alt="version 0.1.2" src="https://img.shields.io/badge/version-0.1.2-64D80D?style=flat-square&labelColor=111827" />
+<img alt="version 0.1.3" src="https://img.shields.io/badge/version-0.1.3-64D80D?style=flat-square&labelColor=111827" />
 <img alt="license MIT" src="https://img.shields.io/badge/license-MIT-64D80D?style=flat-square&labelColor=111827" />
 <img alt="runtime Node 20+" src="https://img.shields.io/badge/runtime-Node_20+-64D80D?style=flat-square&labelColor=111827" />
 
@@ -54,6 +56,20 @@ See every command:
 npx supacron help
 ```
 
+## Prevent Supabase Projects From Pausing
+
+Supabase free projects can be paused when they do not get enough activity. Supacron helps prevent low-traffic Supabase projects from pausing by creating scheduled database activity you can verify.
+
+Use Supacron if you are trying to:
+
+- prevent a Supabase project from pausing due to inactivity
+- keep a Supabase free project alive
+- set up a Supabase keep-alive cron job
+- run a Cloudflare Cron heartbeat for Supabase
+- verify that your Supabase database is actually being touched on schedule
+
+Read the focused guide: [How to Prevent Supabase Projects From Pausing Due to Inactivity](docs/prevent-supabase-project-pausing.md).
+
 ## What Supacron Does
 
 Supacron helps keep low-traffic Supabase projects from being paused for inactivity by creating a real database heartbeat. It installs a small scheduled Cloudflare Worker that calls a protected Supabase RPC on a cron schedule. Supabase stores the latest heartbeat timestamp and ping count, so you can verify that the scheduled Worker is actually running.
@@ -65,6 +81,18 @@ Cloudflare Cron Trigger -> scheduled Worker -> Supabase RPC -> supacron.heartbea
 ```
 
 Supacron has no hosted backend, dashboard, billing system, analytics, queue, GitHub integration, or Vercel path. Your accounts remain yours.
+
+## Manual Setup vs Supacron
+
+You can build this yourself with Cloudflare Workers, Supabase SQL, secrets, cron triggers, and a verification flow. Supacron packages that workflow into one guided CLI command.
+
+| Approach | Good for | Tradeoff |
+| --- | --- | --- |
+| Manual cron ping | Full control | Easy to ping the wrong thing or skip verification |
+| GitHub Actions cron | Simple scheduled jobs | Requires repo workflows and secret management |
+| Vercel Cron | Apps already on Vercel | Tied to a Vercel project |
+| Cloudflare Cron manually | Reliable scheduled Worker | More setup steps across Supabase and Cloudflare |
+| Supacron | One-command Supabase heartbeat setup | Cloudflare-only v1 |
 
 ## Setup Flow
 
@@ -213,6 +241,36 @@ The secret has no expiry timer. During setup or repair, Supabase keeps the curre
 
 The final Worker has no public HTTP handler. During setup and `test`, Supacron briefly deploys a secret-protected test route, calls it once, removes its temporary secret, and restores the final scheduled-only Worker.
 
+## FAQ
+
+### How do I prevent a Supabase project from pausing?
+
+Use a scheduled job that creates real database activity. Supacron automates that pattern with a Cloudflare Cron Trigger, a scheduled Worker, a protected Supabase RPC, and a heartbeat row in Postgres.
+
+### How do I keep a Supabase free project alive?
+
+Run `npx supacron init` and choose a heartbeat frequency. Supacron deploys a private scheduled Worker that calls your Supabase database on schedule, then `npx supacron test` verifies the heartbeat timestamp and ping count.
+
+### Why does my Supabase project pause even if my app gets some traffic?
+
+Traffic is not always the same as database activity. A frontend visit, auth request, storage request, or random URL ping may not prove that Postgres is being touched. Supacron creates a database-backed heartbeat so the activity is visible.
+
+### Can I use Cloudflare Cron to keep Supabase active?
+
+Yes. Supacron uses Cloudflare Cron Triggers and Workers to call a protected Supabase RPC on a schedule. The CLI handles the Supabase SQL setup, Worker deployment, secret binding, and live verification flow.
+
+### Does Supacron guarantee my Supabase project will never pause?
+
+No tool can guarantee future provider-side policy or billing behavior. Supacron helps by creating scheduled database activity and visible proof through a heartbeat timestamp and ping count.
+
+### Does Supacron need my service-role key?
+
+No. Supacron does not ask for service-role keys, database passwords, connection strings, Supabase access tokens, or Cloudflare API tokens.
+
+### Is Supacron only for Supabase free-tier projects?
+
+The main pain is Supabase free-tier inactivity pausing, but the heartbeat can also be useful for low-traffic side projects where you want visible proof that a scheduled database check is running.
+
 ## Package Contents
 
 The published package includes only:
@@ -220,6 +278,7 @@ The published package includes only:
 - `LICENSE`
 - `README.md`
 - `package.json`
+- `docs/**`
 - `src/**`
 
-Tests and docs stay in the repository, not the npm tarball.
+Tests stay in the repository, not the npm tarball.

@@ -1,6 +1,6 @@
 {
   "name": "supacron",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Help prevent Supabase projects from pausing with a private Cloudflare Cron heartbeat.",
   "type": "module",
   "bin": {
@@ -8,6 +8,7 @@
   },
   "files": [
     "src",
+    "docs",
     "README.md"
   ],
   "scripts": {
@@ -20,6 +21,9 @@
     "supabase keep alive",
     "supabase pause",
     "supabase inactivity",
+    "supabase paused",
+    "supabase free tier",
+    "keep alive",
     "cron",
     "heartbeat",
     "cloudflare",
